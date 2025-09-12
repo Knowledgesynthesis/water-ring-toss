@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Water Ring Toss — HTML5 (Vanilla)</title>
+<!--
+================================================================================
+Water Ring Toss (single-file, no libraries)
+
+Custom background:
+- Call window.ringToss.setBackground(dataUrl) with your own base64 image (PNG/JPG).
+- Example (in devtools):
+    window.ringToss.setBackground('data:image/png;base64,iVBORw0K...');
+
+API:
+- window.ringToss.reset()
+- window.ringToss.setMode(name)  // 'Classic' | 'Storm' | 'Gravity Tilt' | 'Time Attack' | 'Zen'
+- window.ringToss.setBackground(dataUrl)
+
+Accessibility:
+- Space / hold: Jet
+- R: Reset
+- P: Pause
+- M: Mute
+- ←/→: Nudge tank (and fallback tilt for Gravity Tilt mode)
+================================================================================
+-->
+<style>
+  :root{
+    --bg:#0b0f1a;
+    --panel:#101827;
+    --ink:#e5f0ff;
+    --accent:#7dd3fc;
+    --accent2:#a78bfa;
+    --good:#34d399;
+    --warn:#fbbf24;
+    --bad:#fb7185;
+    --glass: rgba(255,255,255,0.06);
+    --glass-strong: rgba(255,255,255,0.14);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background: radial-gradient(120% 120% at 50% 0%, #0b1327 10%, #071022 55%, #060a14 100%),
+               var(--bg);
+    color:var(--ink); font-family: system-ui,Segoe UI,Roboto,Inter,Ubuntu,Arial,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+  }
+  /* Keep a 9:16 stage, responsive */
+  .stage-wrap{
+    width:min(96vmin, 680px);
+    aspect-ratio:9/16;
+    position:relative;
+    border-radius:20px;
+    overflow:hidden;
+    box-shadow: 0 18px 60px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.05);
+    background: var(--glass);
+    backdrop-filter: blur(6px);
+  }
+  .bg-slot{
+    position:absolute; inset:0; z-index:0;
+    background-size:cover; background-position:center;
+    filter: saturate(1.2) contrast(1.05) brightness(0.9);
+  }
+  .tank-frame{
+    position:absolute; inset:0; padding:3.5% 5% 22% 5%; /* leave room for big jet button */
+    z-index:1;
+  }
+  canvas#game{
+    width:100%; height:100%; display:block; border-radius:16px;
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.06);
+    background: linear-gradient(#082034, #041420);
+  }
+  /* Top HUD */
+  .hud{
+    position:absolute; left:0; right:0; top:0; z-index:3;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px;
+    gap:8px;
+    pointer-events:none;
+  }
+  .hud .cluster{display:flex; gap:8px; align-items:center; pointer-events:auto;}
+  .pill{
+    background: var(--glass); border:1px solid rgba(255,255,255,0.08);
+    padding:8px 10px; border-radius:999px; display:flex; gap:8px; align-items:center;
+    font-weight:600; letter-spacing:.2px; font-size:13px;
+    backdrop-filter: blur(4px);
+  }
+  .score{color:var(--good)}
+  .timer{color:var(--warn)}
+  .mode{
+    background: var(--glass-strong);
+    cursor:pointer; user-select:none;
+  }
+  .btn{
+    background: var(--glass); border:1px solid rgba(255,255,255,0.12);
+    color:var(--ink); padding:8px 10px; border-radius:10px;
+    display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600;
+    transition:transform .06s ease;
+  }
+  .btn:active{ transform: translateY(1px) }
+  .btn[aria-pressed="true"]{ outline:2px solid var(--accent) }
+  .muted{opacity:.7}
+  /* Bottom controls */
+  .controls{
+    position:absolute; left:0; right:0; bottom:10px; z-index:3;
+    display:grid; grid-template-columns: 1fr; place-items:center; gap:8px;
+    padding:0 10px;
+  }
+  .bottom-row{
+    display:flex; gap:8px; width:100%; justify-content:space-between; align-items:center;
+  }
+  .jet{
+    width:78%; height:68px; border-radius:999px;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:16px; letter-spacing:.4px;
+    background: radial-gradient(120% 140% at 50% 10%, rgba(125,211,252,0.45), rgba(167,139,250,0.45) 40%, rgba(255,255,255,0.06));
+    border:2px solid rgba(255,255,255,0.18);
+    box-shadow: inset 0 -10px 18px rgba(0,0,0,0.25), 0 8px 28px rgba(0,0,0,0.35);
+    cursor:pointer; user-select:none;
+  }
+  .jet.active{
+    background: radial-gradient(120% 140% at 50% 10%, rgba(125,211,252,0.7), rgba(167,139,250,0.7) 45%, rgba(255,255,255,0.12));
+    box-shadow: inset 0 -16px 30px rgba(0,0,0,0.35), 0 12px 36px rgba(0,0,0,0.5);
+    transform: translateY(1px);
+    outline: 2px solid rgba(125,211,252,0.55);
+  }
+  .micro{font-size:12px; opacity:.8}
+  /* Pause overlay */
+  .overlay{
+    position:absolute; inset:0; z-index:4; display:none; place-items:center;
+    background: radial-gradient(80% 60% at 50% 30%, rgba(0,0,0,0.35), rgba(0,0,0,0.6));
+    text-align:center; padding:20px;
+  }
+  .overlay.show{ display:grid }
+  .overlay .card{
+    background: rgba(20,28,46,0.9); border:1px solid rgba(255,255,255,0.1);
+    border-radius:14px; padding:18px 16px; max-width:90%;
+  }
+  .overlay h2{margin:0 0 6px 0; font-size:22px}
+  .overlay p{margin:0; opacity:.85}
+  /* High-contrast text shadow for readability */
+  .hud .pill, .btn, .jet{
+    text-shadow: 0 1px 0 rgba(0,0,0,0.35);
+  }
+  @media (prefers-reduced-motion: reduce){
+    .jet, .btn{ transition:none }
+  }
+  /* SVG icons (as masks) */
+  .icon{
+    width:16px; height:16px; display:inline-block; background: currentColor;
+    -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
+    -webkit-mask-position:center; mask-position:center;
+  }
+  .i-reset{ -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M12 6v3l4-4-4-4v3C6.48 4 2 8.48 2 14s4.48 10 10 10 10-4.48 10-10h-2c0 4.41-3.59 8-8 8S4 18.41 4 14 7.59 6 12 6z"/></svg>'); }
+  .i-pause{ -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>'); }
+  .i-play{ -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M8 5v14l11-7z"/></svg>'); }
+  .i-mute{ -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M16.5 12l3.5 3.5-1.5 1.5L15 13.5 11.5 17l-1.5-1.5L12 12 9 9l1.5-1.5L15 10.5l3.5-3.5L20 8.5zM3 9v6h4l5 5V4L7 9H3z"/></svg>'); }
+  .i-sound{ -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zm-2.5-8v2a8 8 0 0 1 0 12v2c3.87-1.17 6.7-4.78 6.7-9s-2.83-7.83-6.7-9z"/></svg>'); }
+  .i-mode{ -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M12 2l4 4-4 4-4-4 4-4zm0 12l4 4-4 4-4-4 4-4zM2 12l4-4 4 4-4 4-4-4zm16 0l4-4 0 8-4-4z"/></svg>'); }
+</style>
+</head>
+<body>
+  <div class="stage-wrap" role="application" aria-label="Water Ring Toss">
+    <div class="bg-slot" id="bgSlot" style="background-image:url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2XW7kAAAAASUVORK5CYII=');"></div>
+    <div class="hud" aria-live="polite">
+      <div class="cluster">
+        <div class="pill score" id="scorePill" aria-label="Score">Score: <span id="scoreVal">0</span></div>
+        <div class="pill timer" id="timerPill" aria-label="Timer">Time: <span id="timeVal">--</span></div>
+        <div class="pill mode" id="modePill" role="button" tabindex="0" aria-label="Mode toggle"><span class="icon i-mode"></span>&nbsp;<span id="modeName">Classic</span></div>
+      </div>
+      <div class="cluster">
+        <button class="btn" id="resetBtn" aria-label="Reset (R)"><span class="icon i-reset"></span> Reset</button>
+        <button class="btn" id="pauseBtn" aria-label="Pause/Resume (P)"><span class="icon i-pause" id="pauseIcon"></span><span id="pauseText">Pause</span></button>
+        <button class="btn" id="muteBtn" aria-label="Mute/Unmute (M)"><span class="icon i-sound" id="muteIcon"></span><span id="muteText">Sound</span></button>
+      </div>
+    </div>
+
+    <div class="tank-frame">
+      <canvas id="game"></canvas>
+    </div>
+
+    <div class="controls">
+      <div class="bottom-row">
+        <div class="micro">Space/hold: Jet · ←/→: Nudge · R: Reset</div>
+        <div class="micro">Best (TA): <span id="bestVal">0</span></div>
+      </div>
+      <button class="jet" id="jetBtn" aria-pressed="false" aria-label="Jet button — hold to boost">HOLD TO JET</button>
+    </div>
+
+    <div class="overlay" id="pauseOverlay" aria-hidden="true">
+      <div class="card">
+        <h2>Paused</h2>
+        <p>Press <b>P</b> or tap <b>Resume</b> to continue.</p>
+      </div>
+    </div>
+  </div>
+
+<!-- Sounds (tiny WAVs, base64) -->
+<audio id="sndBubble" preload="auto" src="data:audio/wav;base64,UklGRlYAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAABAAACAAAASAAAAEAAAFRkYXRhKAAAAAD8//8AAP7//wAA/v//AAD8//8AAPz//wAA/v//AAD+//8AAP3//wAA" ></audio>
+<audio id="sndScore" preload="auto" src="data:audio/wav;base64,UklGRmIAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAABAAACAAAASAAAAEAAAFRkYXRhigAAAAD/AP//gAD//wAA//8AAP//AAD//wAA/4AAAP//AAD//wAA//8AAP+AAAD//wAA" ></audio>
+
+<script>
+/* =============================== UTILITIES =============================== */
+const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+const lerp = (a,b,t)=>a+(b-a)*t;
+const rand = (a=1,b=0)=>Math.random()*(a-b)+b;
+function now(){ return performance.now(); }
+
+/* Simple PRNG (for repeatable tiny jitters if desired) */
+function mulberry32(a){ return function(){ var t = a += 0x6D2B79F5; t = Math.imul(t ^ t>>>15, t | 1); t ^= t + Math.imul(t ^ t>>>7, t | 61); return ((t ^ t>>>14) >>> 0)/4294967296; }; }
+
+/* ============================ GAME CONSTANTS ============================ */
+const MODES = ['Classic','Storm','Gravity Tilt','Time Attack','Zen'];
+const COLORS = ['#ff6b6b','#ffd166','#06d6a0','#4cc9f0','#a78bfa','#f472b6'];
+const RING_COUNT_CLASSIC = 12;
+const TA_DURATION = 30;
+const CLASSIC_DURATION = 90;
+
+const G = 900;       // gravity px/s^2 (will be scaled by density to feel "buoyant")
+const BUOY = 700;    // upward buoyancy
+const DRAG = 0.85;   // linear velocity damping per second fraction
+const ANG_DRAG = 0.93;
+const RING_R = 18;   // ring radius
+const RING_T = 8;    // ring thickness (stroke width)
+const RING_M = 0.28; // mass
+const WALL_REST = 0.45; // wall restitution
+const JET_FORCE = 1800; // baseline upward force
+const JET_CONE = Math.PI/6; // 30 degrees
+const JET_COOLDOWN = 45; // ms gating for particle emission
+const PEG_R = 8;
+const PEG_GLOW_MS = 600;
+const SETTLE_VY = 40; // vertical velocity threshold for settle
+
+/* =============================== GLOBALS ================================ */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W=0,H=0, scale=1;
+let rings=[], pegs=[], bubbles=[], confetti=[];
+let running=true, paused=false, muted=false;
+let lastT=performance.now(), accShake=0, lastJetParticle=0;
+let score=0, bestTA = +localStorage.getItem('ringToss.bestTA')||0;
+document.getElementById('bestVal').textContent = bestTA;
+let timeLeft = CLASSIC_DURATION, timed=false;
+let modeIndex = 0;
+let gravity = {x:0, y:G};
+let rng = mulberry32(1337);
+let reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ============================== RESIZE SETUP ============================ */
+function resize(){
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width*devicePixelRatio);
+  canvas.height= Math.floor(rect.height*devicePixelRatio);
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  W = rect.width; H = rect.height;
+  scale = W/360; // reference size ~360x640
+}
+window.addEventListener('resize', resize);
+
+/* ============================== RING OBJECT ============================ */
+function makeRing(x,y,color){
+  return {
+    x,y, vx:0, vy:0,
+    ang:0, angV:0,
+    r:RING_R*scale, t:RING_T*scale, m:RING_M,
+    color, hooked:false, hookPeg:null, scored:false,
+  };
+}
+
+/* ================================ PEGS ================================= */
+function setupPegs(){
+  const cx = W/2;
+  const py = H*0.38;
+  const gap = 58*scale;
+  pegs = [
+    {x:cx-gap/2, y:py, r:PEG_R*scale, glow:0},
+    {x:cx+gap/2, y:py, r:PEG_R*scale, glow:0},
+  ];
+}
+
+/* =============================== MODES ================================= */
+function applyModeDefaults(){
+  document.getElementById('timerPill').style.display = 'inline-flex';
+  document.getElementById('bestVal').parentElement.style.visibility = (MODES[modeIndex]==='Time Attack')?'visible':'hidden';
+
+  switch(MODES[modeIndex]){
+    case 'Classic':
+      timed=true; timeLeft=CLASSIC_DURATION; spawnInitial(RING_COUNT_CLASSIC); break;
+    case 'Storm':
+      timed=true; timeLeft=CLASSIC_DURATION; spawnInitial(RING_COUNT_CLASSIC); break;
+    case 'Gravity Tilt':
+      timed=true; timeLeft=CLASSIC_DURATION; spawnInitial(RING_COUNT_CLASSIC); break;
+    case 'Time Attack':
+      timed=true; timeLeft=TA_DURATION; rings=[]; // continuous spawn
+      break;
+    case 'Zen':
+      timed=false; timeLeft=0; spawnInitial(RING_COUNT_CLASSIC);
+      document.getElementById('timerPill').style.display = 'none';
+      break;
+  }
+}
+
+/* ============================ INITIALIZATION ============================ */
+function spawnInitial(n){
+  rings = [];
+  const padX = W*0.18, padY = H*0.58;
+  for(let i=0;i<n;i++){
+    const x = lerp(padX, W-padX, (i%6)/5) + rand(-10,10);
+    const y = lerp(padY, H*0.86, Math.floor(i/6)/2) + rand(-8,8);
+    rings.push( makeRing(x,y, COLORS[i%COLORS.length]) );
+  }
+}
+
+/* ================================ INPUT ================================ */
+const jetBtn = document.getElementById('jetBtn');
+let jetting=false, jetStart=0, jetPower=0;
+
+function setJet(state){
+  jetting=state;
+  jetBtn.classList.toggle('active', jetting);
+  jetBtn.setAttribute('aria-pressed', jetting?'true':'false');
+  if(state){ jetStart = performance.now(); }
+}
+jetBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); setJet(true); });
+jetBtn.addEventListener('pointerup',   e=>{ setJet(false); });
+jetBtn.addEventListener('pointerleave',e=>{ setJet(false); });
+jetBtn.addEventListener('touchstart',  e=>{ setJet(true); }, {passive:true});
+jetBtn.addEventListener('touchend',    e=>{ setJet(false); });
+
+document.addEventListener('keydown', e=>{
+  if(e.code==='Space'){ setJet(true); e.preventDefault(); }
+  if(e.code==='KeyR'){ resetGame(); }
+  if(e.code==='KeyP'){ togglePause(); }
+  if(e.code==='KeyM'){ toggleMute(); }
+  if(e.code==='ArrowLeft'){ nudgeTank(-1); }
+  if(e.code==='ArrowRight'){ nudgeTank(+1); }
+});
+document.addEventListener('keyup', e=>{
+  if(e.code==='Space'){ setJet(false); }
+});
+
+/* Pause / Reset / Mute */
+document.getElementById('resetBtn').onclick = ()=>resetGame();
+document.getElementById('pauseBtn').onclick = ()=>togglePause();
+document.getElementById('muteBtn').onclick = ()=>toggleMute();
+
+/* Mode toggle */
+const modePill = document.getElementById('modePill');
+modePill.addEventListener('click', ()=>cycleMode());
+modePill.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); cycleMode(); } });
+
+function cycleMode(){
+  modeIndex = (modeIndex+1)%MODES.length;
+  document.getElementById('modeName').textContent = MODES[modeIndex];
+  resetGame(false);
+}
+
+/* ============================ ORIENTATION TILT ========================= */
+let hasDeviceTilt=false, baseTilt={x:0,y:0};
+if(window.DeviceOrientationEvent){
+  window.addEventListener('deviceorientation', (ev)=>{
+    hasDeviceTilt=true;
+    // Map gamma (left-right tilt) to gravity x, beta (front-back) to gravity y
+    if(MODES[modeIndex]!=='Gravity Tilt') return;
+    const gx = clamp((ev.gamma||0)/45, -1, 1);  // -45..45 degrees
+    const gy = clamp((ev.beta||0)/45,  -1, 1);
+    gravity.x = G*gx*0.35;
+    gravity.y = G*(1 + gy*0.15);
+  }, true);
+}
+function nudgeTank(dir){
+  if(MODES[modeIndex]==='Gravity Tilt' && !hasDeviceTilt){
+    gravity.x = clamp(gravity.x + dir*130, -260, 260);
+    setTimeout(()=>{ gravity.x = lerp(gravity.x, 0, 0.2); }, 180);
+  }else{
+    // For other modes, tiny lateral puff
+    rings.forEach(r=> r.vx += dir*60 );
+  }
+}
+
+/* ================================ AUDIO ================================= */
+const sndBubble = document.getElementById('sndBubble');
+const sndScore  = document.getElementById('sndScore');
+function playSound(el, vol=1){
+  if(muted) return;
+  try{
+    const a = el.cloneNode();
+    a.volume = vol;
+    a.play();
+  }catch(e){}
+}
+function toggleMute(){
+  muted = !muted;
+  document.getElementById('muteBtn').classList.toggle('muted', muted);
+  document.getElementById('muteIcon').className = 'icon ' + (muted?'i-mute':'i-sound');
+  document.getElementById('muteText').textContent = muted?'Muted':'Sound';
+}
+
+/* ================================ PHYSICS ================================ */
+function integrate(dt){
+  // storm side-currents
+  let side = 0, swirl=0;
+  if(MODES[modeIndex]==='Storm'){
+    side = Math.sin(performance.now()/950)*120 + Math.sin(performance.now()/4200)*220;
+    if((performance.now()/1000|0)%6===0) swirl = Math.sin(performance.now()/180)*80;
+  }
+
+  for(const r of rings){
+    if(r.hooked){
+      // Keep ring anchored around peg with small damping
+      const p = r.hookPeg;
+      // Sink a bit below peg top
+      const target = {x:p.x, y:p.y + r.t*0.25};
+      r.x = lerp(r.x, target.x, 0.18);
+      r.y = lerp(r.y, target.y, 0.18);
+      r.vx *= 0.7; r.vy *= 0.7; r.angV*=0.6;
+      continue;
+    }
+
+    // Forces
+    let ax = (gravity.x - side + swirl*( (r.y-H*0.5)/(H*0.5) )) / r.m;
+    let ay = (gravity.y - BUOY) / r.m;
+
+    // Jet impulse within cone from bottom center nozzle
+    if(jetting){
+      const nozzle = {x: W*0.5, y: H*0.92};
+      const toR = {x: r.x - nozzle.x, y: r.y - nozzle.y};
+      const dist = Math.hypot(toR.x,toR.y);
+      if(dist < H*0.9){
+        const angle = Math.atan2(-toR.y, toR.x); // jet goes upward (pi/2)
+        const coneAngle = Math.abs(angle - Math.PI/2);
+        if(coneAngle < JET_CONE){
+          const press = clamp((performance.now()-jetStart)/600, 0, 1); // scale with hold
+          const force = (JET_FORCE * (1+press*1.2)) / (1 + dist*0.01);
+          ay += -force / r.m;
+
+          // turbulence jitter
+          ax += (Math.random()-0.5)* (220 / r.m);
+          ay += (Math.random()-0.5)* (120 / r.m);
+
+          // particles
+          if(!reduceMotion && performance.now()-lastJetParticle>JET_COOLDOWN){
+            spawnBubbles(nozzle.x + rand(-12,12), nozzle.y-4, 8);
+            lastJetParticle = performance.now();
+            playSound(sndBubble, 0.35);
+          }
+        }
+      }
+    }
+
+    // Apply acceleration
+    r.vx += ax * dt;
+    r.vy += ay * dt;
+
+    // Drag
+    r.vx *= (1 - (1-DRAG)*dt);
+    r.vy *= (1 - (1-DRAG)*dt);
+    r.angV*= (1 - (1-ANG_DRAG)*dt);
+
+    // Integrate position
+    r.x += r.vx * dt;
+    r.y += r.vy * dt;
+    r.ang += r.angV * dt;
+
+    // Wall collisions
+    const left = r.r + 8, right = W - (r.r + 8), top = r.r + 14, bottom = H*0.9 - r.r;
+    if(r.x<left){ r.x=left; r.vx = -r.vx*WALL_REST; }
+    if(r.x>right){ r.x=right; r.vx = -r.vx*WALL_REST; }
+    if(r.y<top){ r.y=top; r.vy = -r.vy*WALL_REST; }
+    if(r.y>bottom){ r.y=bottom; r.vy = -r.vy*WALL_REST; }
+
+    // Peg interaction (hook logic)
+    for(const p of pegs){
+      const d = Math.hypot(r.x-p.x, r.y-p.y);
+      const innerR = r.r - r.t*0.5;
+      // Soft push away from peg body to avoid overlap explosions
+      const minDist = innerR*0.72;
+      if(d < minDist){
+        const nx = (r.x-p.x)/ (d||1), ny=(r.y-p.y)/(d||1);
+        const overlap = (minDist - d);
+        r.x += nx*overlap*0.4; r.y += ny*overlap*0.4;
+        r.vx += nx*overlap*15; r.vy += ny*overlap*15;
+      }
+      // Scoring condition: peg inside inner hole, ring beneath peg a bit, and low vy
+      if(!r.scored && d < innerR*0.85 && r.y > p.y+2 && Math.abs(r.vy) < SETTLE_VY){
+        r.hooked = true; r.hookPeg = p; r.scored = true; p.glow = PEG_GLOW_MS;
+        score += (MODES[modeIndex]==='Storm')?2:1;
+        document.getElementById('scoreVal').textContent = score;
+        playSound(sndScore, 0.65);
+        if(!reduceMotion) spawnConfetti(p.x, p.y);
+      }
+    }
+  }
+
+  // Ring-ring soft separation
+  for(let i=0;i<rings.length;i++){
+    for(let j=i+1;j<rings.length;j++){
+      const a=rings[i], b=rings[j];
+      const d = Math.hypot(a.x-b.x, a.y-b.y);
+      const minD = (a.r+b.r)*0.85;
+      if(d>0 && d<minD && !(a.hooked && b.hooked)){
+        const nx=(a.x-b.x)/d, ny=(a.y-b.y)/d;
+        const overlap = (minD - d)*0.5;
+        a.x += nx*overlap; a.y += ny*overlap;
+        b.x -= nx*overlap; b.y -= ny*overlap;
+        // bounce a bit
+        const relVx = a.vx - b.vx, relVy = a.vy - b.vy;
+        const sep = relVx*nx + relVy*ny;
+        if(sep<0){
+          const impulse = -(1.0)*sep;
+          a.vx += nx*impulse*0.5; a.vy += ny*impulse*0.5;
+          b.vx -= nx*impulse*0.5; b.vy -= ny*impulse*0.5;
+        }
+      }
+    }
+  }
+
+  // Particles update
+  updateParticles(dt);
+}
+
+/* ============================== PARTICLES =============================== */
+function spawnBubbles(x,y,count){
+  for(let i=0;i<count;i++){
+    bubbles.push({
+      x:x+rand(-6,6), y:y+rand(-6,6),
+      vy: -rand(60,150),
+      life: rand(0.5,1.2), t:0, r: rand(1.5,3.2)
+    });
+  }
+}
+function spawnConfetti(x,y){
+  for(let i=0;i<80;i++){
+    confetti.push({
+      x, y,
+      vx: rand(-160,160), vy: rand(-220,-60),
+      t:0, life: rand(0.8,1.2), s: rand(2,4),
+      color: COLORS[i%COLORS.length]
+    });
+  }
+  accShake = 10; // px
+}
+function updateParticles(dt){
+  bubbles = bubbles.filter(b=>{
+    b.t += dt; b.y += b.vy*dt; b.x += Math.sin(b.t*8)*8*dt;
+    return b.t < b.life;
+  });
+  confetti = confetti.filter(c=>{
+    c.t += dt; c.vy += gravity.y*0.2*dt; // mild gravity
+    c.x += c.vx*dt; c.y += c.vy*dt;
+    return c.t < c.life;
+  });
+}
+
+/* ================================ RENDER ================================ */
+function draw(){
+  // Screen shake
+  let sx=0, sy=0;
+  if(accShake>0 && !reduceMotion){
+    sx = (Math.random()-0.5)*accShake;
+    sy = (Math.random()-0.5)*accShake;
+    accShake = Math.max(0, accShake - 0.8);
+  }
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // Tank water + caustics
+  ctx.clearRect(-20,-20,W+40,H+40);
+  // Glass rim
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(8,8,W-16,H*0.9-8);
+
+  // Water gradient
+  const g = ctx.createLinearGradient(0, H*0.2, 0, H*0.9);
+  g.addColorStop(0, 'rgba(20,70,120,0.55)');
+  g.addColorStop(1, 'rgba(10,30,60,0.85)');
+  ctx.fillStyle = g;
+  ctx.fillRect(10, 12, W-20, H*0.9-14);
+
+  // Parallax faint caustics
+  ctx.globalCompositeOperation = 'screen';
+  for(let i=0;i<2;i++){
+    ctx.fillStyle = `rgba(120,200,255,${0.045 + i*0.02})`;
+    const wave = 18 + i*10;
+    for(let x=14;x<W-14;x+=wave){
+      const y = H*0.28 + Math.sin((x/50)+(performance.now()/1200)+i)*6;
+      ctx.fillRect(x, y, 8, H*0.6);
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Pegs
+  for(const p of pegs){
+    const grd = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, p.r+12);
+    grd.addColorStop(0,'rgba(180,210,255,0.9)');
+    grd.addColorStop(1,'rgba(100,130,220,0.0)');
+    if(p.glow>0){
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r+12, 0, Math.PI*2); ctx.fill();
+      p.glow -= 16;
+    }
+    ctx.fillStyle = '#c7d2fe';
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(20,30,80,0.6)'; ctx.lineWidth=2; ctx.stroke();
+  }
+
+  // Rings
+  rings.forEach(r=>{
+    ctx.save();
+    ctx.translate(r.x, r.y);
+    ctx.rotate(r.ang);
+    // Outer
+    ctx.lineWidth = r.t;
+    ctx.strokeStyle = r.color;
+    ctx.beginPath(); ctx.arc(0,0,r.r,0,Math.PI*2); ctx.stroke();
+    // Inner highlight
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath(); ctx.arc(0,0,r.r - r.t*0.5 + 1, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  });
+
+  // Bubbles
+  for(const b of bubbles){
+    ctx.globalAlpha = 1 - b.t/b.life;
+    ctx.fillStyle = '#e0f2fe';
+    ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Confetti
+  for(const c of confetti){
+    ctx.globalAlpha = 1 - c.t/c.life;
+    ctx.fillStyle = c.color;
+    ctx.fillRect(c.x, c.y, c.s, c.s);
+    ctx.globalAlpha = 1;
+  }
+
+  // Nozzle
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillRect(W*0.5-22, H*0.9-6, 44, 12);
+  ctx.fillStyle = '#cbd5e1';
+  ctx.fillRect(W*0.5-10, H*0.9-2, 20, 6);
+
+  ctx.restore();
+}
+
+/* ================================ TIMER ================================= */
+let lastSecond = performance.now();
+function updateTimer(dt){
+  if(!timed) { document.getElementById('timeVal').textContent = '∞'; return; }
+  if(paused) return;
+  if(performance.now()-lastSecond>=1000){
+    timeLeft = Math.max(0, timeLeft - 1);
+    document.getElementById('timeVal').textContent = timeLeft.toString().padStart(2,'0')+'s';
+    lastSecond = performance.now();
+    if(timeLeft===0){
+      paused=true;
+      document.getElementById('pauseText').textContent = 'Resume';
+      document.getElementById('pauseIcon').className='icon i-play';
+      showPause(true, 'Time\'s up!');
+      if(MODES[modeIndex]==='Time Attack'){
+        if(score>bestTA){ bestTA=score; localStorage.setItem('ringToss.bestTA', bestTA); document.getElementById('bestVal').textContent = bestTA; }
+      }
+    }
+  }
+}
+function showPause(show, title){
+  const ov = document.getElementById('pauseOverlay');
+  ov.classList.toggle('show', show);
+  ov.setAttribute('aria-hidden', show?'false':'true');
+  if(title) ov.querySelector('h2').textContent = title;
+}
+
+/* ============================== GAME LOOP =============================== */
+function loop(t){
+  if(!running) return;
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.032, (t - lastT)/1000); // clamp
+  lastT = t;
+  if(paused){ draw(); return; }
+
+  // Time Attack spawning
+  if(MODES[modeIndex]==='Time Attack'){
+    if(Math.random() < 1.4*dt){ // average ~1.4 rings/sec
+      const x = W*0.2 + Math.random()*W*0.6;
+      const r = makeRing(x, H*0.86+rand(0,10), COLORS[(Math.random()*COLORS.length)|0]);
+      r.vy = -rand(20,120);
+      rings.push(r);
+      if(rings.length>48) rings = rings.slice(-48);
+    }
+  }
+
+  integrate(dt);
+  draw();
+  updateTimer(dt);
+}
+
+/* =============================== CONTROLS =============================== */
+function resetGame(hard=true){
+  score=0; document.getElementById('scoreVal').textContent = score;
+  bubbles.length=confetti.length=0;
+  gravity = {x:0, y:G};
+  paused=false; document.getElementById('pauseText').textContent='Pause'; document.getElementById('pauseIcon').className='icon i-pause';
+  showPause(false);
+  setupPegs();
+  if(hard) { // keep same mode
+    applyModeDefaults();
+  }else{
+    applyModeDefaults();
+  }
+  document.getElementById('timeVal').textContent = timed ? (timeLeft+'s') : '∞';
+}
+function togglePause(){
+  paused = !paused;
+  document.getElementById('pauseText').textContent = paused?'Resume':'Pause';
+  document.getElementById('pauseIcon').className = 'icon ' + (paused?'i-play':'i-pause');
+  showPause(paused);
+}
+
+/* ================================ START ================================= */
+function start(){
+  resize(); setupPegs(); applyModeDefaults();
+  document.getElementById('modeName').textContent = MODES[modeIndex];
+  document.getElementById('timeVal').textContent = timed ? (timeLeft+'s') : '∞';
+  requestAnimationFrame(loop);
+}
+start();
+
+/* =============================== PUBLIC API ============================= */
+window.ringToss = {
+  reset: resetGame,
+  setMode(name){ const idx = MODES.indexOf(name); if(idx>-1){ modeIndex=idx; document.getElementById('modeName').textContent=name; resetGame(false);} },
+  setBackground(dataUrl){ document.getElementById('bgSlot').style.backgroundImage = `url('${dataUrl}')`; }
+};
+</script>
+</body>
+</html>
