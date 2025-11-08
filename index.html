@@ -280,22 +280,23 @@ const CONFIG = {
   BUOYANCY: 3.5,         // Light buoyancy - rings slowly settle
   WATER_DRAG: 0.92,      // Water resistance
   JET_FORCE: 45,         // Stronger jet force
-  JET_RADIUS: 1.2,       // Jet radius
-  POST_HEIGHT: 3.5,
-  POST_RADIUS: 0.08,
-  RING_OUTER_R: 0.35,
-  RING_INNER_R: 0.27,
-  RING_THICKNESS: 0.06,
-  TANK_WIDTH: 4,
-  TANK_HEIGHT: 6,
-  TANK_DEPTH: 1.5,       // Reduced depth - less 3D depth
-  TILT_FORCE: 4.5,       // How much tilt affects ring movement (gravity)
-  NOZZLE_X: -1.2,        // Nozzle on left side
-  NOZZLE_Z: 0.6,         // Nozzle position front
+  JET_RADIUS: 0.8,       // Jet radius (smaller tank)
+  POST_HEIGHT: 2.4,      // Smaller posts
+  POST_RADIUS: 0.055,    // Smaller post radius
+  RING_OUTER_R: 0.24,    // Smaller rings
+  RING_INNER_R: 0.18,
+  RING_THICKNESS: 0.04,
+  TANK_WIDTH: 2.6,       // Smaller tank - 65% of original
+  TANK_HEIGHT: 4.0,
+  TANK_DEPTH: 1.0,
+  MAX_TILT_ANGLE: Math.PI / 4,  // 45 degrees max tilt
+  NOZZLE_X: -0.8,        // Nozzle on left side (adjusted for smaller tank)
+  NOZZLE_Z: 0.4,         // Nozzle position front (adjusted)
 };
 
 /* ========================== GLOBALS ========================== */
 let scene, camera, renderer, container;
+let gameContainer;  // Container that holds and rotates the entire game
 let rings = [], posts = [];
 let waterLevel = CONFIG.TANK_HEIGHT * 0.75;
 let jetting = false, jetStartTime = 0;
@@ -304,7 +305,7 @@ let paused = false, muted = false, running = true;
 let clock = new THREE.Clock();
 let tankMesh, waterMesh, nozzleMesh;
 let jetParticles = [];
-let tiltX = 0, tiltZ = 0;  // Tilt values - affect rings as lateral gravity
+let tiltX = 0, tiltZ = 0;  // Tilt values (-1 to 1, mapped to ±45°)
 
 /* ========================== THREE.JS SETUP ========================== */
 function initThree() {
@@ -318,8 +319,8 @@ function initThree() {
   // Camera
   const aspect = window.innerWidth / window.innerHeight;
   camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 100);
-  camera.position.set(0, 4, 7);
-  camera.lookAt(0, 2.5, 0);
+  camera.position.set(0, 2.5, 5);
+  camera.lookAt(0, 1.8, 0);
 
   // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -352,6 +353,10 @@ function initThree() {
   rimLight.position.set(0, 5, -3);
   scene.add(rimLight);
 
+  // Create game container (this will rotate for tilt)
+  gameContainer = new THREE.Group();
+  scene.add(gameContainer);
+
   // Create tank
   createTank();
 
@@ -380,7 +385,7 @@ function createTank() {
   });
   tankMesh = new THREE.Mesh(tankGeo, tankMat);
   tankMesh.position.y = CONFIG.TANK_HEIGHT / 2;
-  scene.add(tankMesh);
+  gameContainer.add(tankMesh);
 
   // Tank frame (edges)
   const edges = new THREE.EdgesGeometry(tankGeo);
@@ -403,7 +408,7 @@ function createTank() {
   waterMesh.rotation.x = -Math.PI / 2;
   waterMesh.position.y = waterLevel;
   waterMesh.receiveShadow = true;
-  scene.add(waterMesh);
+  gameContainer.add(waterMesh);
 
   // Base platform
   const baseGeo = new THREE.BoxGeometry(CONFIG.TANK_WIDTH, 0.2, CONFIG.TANK_DEPTH);
@@ -415,7 +420,7 @@ function createTank() {
   const base = new THREE.Mesh(baseGeo, baseMat);
   base.position.y = -0.1;
   base.receiveShadow = true;
-  scene.add(base);
+  gameContainer.add(base);
 }
 
 /* ========================== POSTS CREATION ========================== */
@@ -434,7 +439,7 @@ function createPosts() {
     emissiveIntensity: 0.2,
   });
 
-  const spacing = 0.7;
+  const spacing = 0.5;
   const yPos = CONFIG.POST_HEIGHT / 2;
 
   [-spacing/2, spacing/2].forEach(x => {
@@ -442,7 +447,7 @@ function createPosts() {
     post.position.set(x, yPos, 0);
     post.castShadow = true;
     post.receiveShadow = true;
-    scene.add(post);
+    gameContainer.add(post);
 
     posts.push({
       mesh: post,
@@ -470,7 +475,7 @@ function createNozzle() {
   });
   nozzleMesh = new THREE.Mesh(nozzleGeo, nozzleMat);
   nozzleMesh.position.set(CONFIG.NOZZLE_X, 0.1, CONFIG.NOZZLE_Z);
-  scene.add(nozzleMesh);
+  gameContainer.add(nozzleMesh);
 }
 
 /* ========================== RING CREATION ========================== */
@@ -504,7 +509,7 @@ function createRing(x, y, z, colorHex) {
   ring.position.set(x, y, z);
   ring.castShadow = true;
   ring.receiveShadow = true;
-  scene.add(ring);
+  gameContainer.add(ring);
 
   return {
     mesh: ring,
@@ -523,13 +528,13 @@ function createRing(x, y, z, colorHex) {
 
 /* ========================== SPAWN RINGS ========================== */
 function spawnInitialRings() {
-  rings.forEach(r => scene.remove(r.mesh));
+  rings.forEach(r => gameContainer.remove(r.mesh));
   rings = [];
 
   const rows = 3;
   const cols = 4;
-  const startZ = -0.8;
-  const spacing = 0.45;
+  const startZ = -0.5;
+  const spacing = 0.3;
 
   for (let i = 0; i < CONFIG.RING_COUNT; i++) {
     const row = Math.floor(i / cols);
@@ -545,6 +550,10 @@ function spawnInitialRings() {
 
 /* ========================== PHYSICS ========================== */
 function updatePhysics(dt) {
+  // Transform world gravity to gameContainer's local space
+  const worldGravity = new THREE.Vector3(0, CONFIG.GRAVITY + CONFIG.BUOYANCY, 0);
+  const localGravity = worldGravity.clone().applyQuaternion(gameContainer.quaternion.clone().invert());
+
   rings.forEach(ring => {
     const pos = ring.mesh.position;
 
@@ -560,14 +569,10 @@ function updatePhysics(dt) {
       return;
     }
 
-    // Gravity and buoyancy - slight net downward force
-    let accelY = (CONFIG.GRAVITY + CONFIG.BUOYANCY) / ring.mass;
-    let accelX = 0;
-    let accelZ = 0;
-
-    // Apply tilt as lateral gravity forces
-    accelX += tiltX * CONFIG.TILT_FORCE / ring.mass;
-    accelZ += tiltZ * CONFIG.TILT_FORCE / ring.mass;
+    // Gravity in local space (accounts for tank tilt)
+    let accelX = localGravity.x / ring.mass;
+    let accelY = localGravity.y / ring.mass;
+    let accelZ = localGravity.z / ring.mass;
 
     // Jet force - ONLY when jetting and ONLY near the nozzle
     if (jetting) {
@@ -738,7 +743,7 @@ function spawnJetParticles() {
       nozzlePos.y + 0.15,
       nozzlePos.z + (Math.random() - 0.5) * 0.2
     );
-    scene.add(particle);
+    gameContainer.add(particle);
 
     jetParticles.push({
       mesh: particle,
@@ -757,7 +762,7 @@ function updateJetParticles(dt) {
   jetParticles = jetParticles.filter(p => {
     p.age += dt;
     if (p.age >= p.life) {
-      scene.remove(p.mesh);
+      gameContainer.remove(p.mesh);
       return false;
     }
 
@@ -781,6 +786,14 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.033);
 
   if (!paused) {
+    // Rotate game container based on tilt (max ±45°)
+    const targetRotationZ = -tiltX * CONFIG.MAX_TILT_ANGLE;  // Roll (left-right)
+    const targetRotationX = tiltZ * CONFIG.MAX_TILT_ANGLE;   // Pitch (front-back)
+
+    // Smooth rotation interpolation
+    gameContainer.rotation.z += (targetRotationZ - gameContainer.rotation.z) * 0.1;
+    gameContainer.rotation.x += (targetRotationX - gameContainer.rotation.x) * 0.1;
+
     updatePhysics(dt);
 
     // Spawn jet particles
@@ -875,10 +888,16 @@ function resetGame() {
   score = 0;
   document.getElementById('scoreVal').textContent = score;
 
-  jetParticles.forEach(p => scene.remove(p.mesh));
+  jetParticles.forEach(p => gameContainer.remove(p.mesh));
   jetParticles = [];
 
   spawnInitialRings();
+
+  // Reset tilt
+  tiltX = 0;
+  tiltZ = 0;
+  gameContainer.rotation.x = 0;
+  gameContainer.rotation.z = 0;
 
   paused = false;
   showPause(false);
