@@ -331,46 +331,41 @@ function initPhysics() {
   world.defaultContactMaterial = contactMaterial;
 
   // Tank floor
-  const floorBody = new CANNON.Body({
-    mass: 0,  // Static
-    shape: new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, 0.1, CONFIG.TANK_DEPTH/2)),
-    position: new CANNON.Vec3(0, 0, 0),
-  });
+  const floorShape = new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, 0.1, CONFIG.TANK_DEPTH/2));
+  const floorBody = new CANNON.Body({ mass: 0 });
+  floorBody.addShape(floorShape);
+  floorBody.position.set(0, 0, 0);
   world.addBody(floorBody);
 
   // Tank walls
   const wallThickness = 0.1;
 
   // Left wall
-  const leftWall = new CANNON.Body({
-    mass: 0,
-    shape: new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH/2)),
-    position: new CANNON.Vec3(-CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT/2, 0),
-  });
+  const leftWallShape = new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH/2));
+  const leftWall = new CANNON.Body({ mass: 0 });
+  leftWall.addShape(leftWallShape);
+  leftWall.position.set(-CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT/2, 0);
   world.addBody(leftWall);
 
   // Right wall
-  const rightWall = new CANNON.Body({
-    mass: 0,
-    shape: new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH/2)),
-    position: new CANNON.Vec3(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT/2, 0),
-  });
+  const rightWallShape = new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH/2));
+  const rightWall = new CANNON.Body({ mass: 0 });
+  rightWall.addShape(rightWallShape);
+  rightWall.position.set(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT/2, 0);
   world.addBody(rightWall);
 
   // Front wall
-  const frontWall = new CANNON.Body({
-    mass: 0,
-    shape: new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT, wallThickness)),
-    position: new CANNON.Vec3(0, CONFIG.TANK_HEIGHT/2, CONFIG.TANK_DEPTH/2),
-  });
+  const frontWallShape = new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT, wallThickness));
+  const frontWall = new CANNON.Body({ mass: 0 });
+  frontWall.addShape(frontWallShape);
+  frontWall.position.set(0, CONFIG.TANK_HEIGHT/2, CONFIG.TANK_DEPTH/2);
   world.addBody(frontWall);
 
   // Back wall
-  const backWall = new CANNON.Body({
-    mass: 0,
-    shape: new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT, wallThickness)),
-    position: new CANNON.Vec3(0, CONFIG.TANK_HEIGHT/2, -CONFIG.TANK_DEPTH/2),
-  });
+  const backWallShape = new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT, wallThickness));
+  const backWall = new CANNON.Body({ mass: 0 });
+  backWall.addShape(backWallShape);
+  backWall.position.set(0, CONFIG.TANK_HEIGHT/2, -CONFIG.TANK_DEPTH/2);
   world.addBody(backWall);
 }
 
@@ -513,12 +508,12 @@ function createPosts() {
     gameContainer.add(post);
 
     // Post physics body (static cylinder)
+    const postShape = new CANNON.Cylinder(CONFIG.POST_RADIUS * 1.3, CONFIG.POST_RADIUS, CONFIG.POST_HEIGHT, 16);
     const postBody = new CANNON.Body({
       mass: 0,
-      shape: new CANNON.Cylinder(CONFIG.POST_RADIUS * 1.3, CONFIG.POST_RADIUS, CONFIG.POST_HEIGHT, 16),
-      position: new CANNON.Vec3(x, yPos, 0),
     });
-    // Rotate to match Three.js cylinder (Cannon cylinders are Y-axis by default, same as Three.js)
+    postBody.addShape(postShape);
+    postBody.position.set(x, yPos, 0);
     world.addBody(postBody);
 
     posts.push({
@@ -587,16 +582,19 @@ function createRing(x, y, z, colorHex) {
 
   // Cannon.js physics body (cylinder approximation - much more stable than torus)
   const ringRadius = (CONFIG.RING_OUTER_R + CONFIG.RING_INNER_R) / 2;
+  const cylinderShape = new CANNON.Cylinder(ringRadius, ringRadius, CONFIG.RING_THICKNESS, 16);
+
   const ringBody = new CANNON.Body({
     mass: CONFIG.RING_MASS,
-    shape: new CANNON.Cylinder(ringRadius, ringRadius, CONFIG.RING_THICKNESS, 16),
-    position: new CANNON.Vec3(x, y, z),
     linearDamping: CONFIG.WATER_LINEAR_DRAG,
     angularDamping: CONFIG.WATER_ANGULAR_DRAG,
   });
 
-  // Rotate body to match Three.js ring orientation (flat)
-  ringBody.quaternion.setFromEuler(Math.PI / 2, 0, 0);
+  // Rotate cylinder shape to be horizontal (Cannon cylinders are Y-axis by default)
+  const quat = new CANNON.Quaternion();
+  quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
+  ringBody.addShape(cylinderShape, new CANNON.Vec3(0, 0, 0), quat);
+  ringBody.position.set(x, y, z);
 
   world.addBody(ringBody);
 
