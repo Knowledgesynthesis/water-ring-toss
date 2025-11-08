@@ -90,18 +90,22 @@
       TANK_WIDTH: 3,
       TANK_HEIGHT: 4,
       TANK_DEPTH: 1.5,
-      RING_COUNT: 6,
+      RING_COUNT: 8,
       RING_RADIUS: 0.2,
       POST_HEIGHT: 2.5,
       POST_RADIUS: 0.06,
       GRAVITY: -9.8,
       DRAG: 0.98,
-      JET_FORCE: 0.5,
+      JET_FORCE: 0.8,
+      JET_RADIUS: 0.8,
+      NOZZLE_X: -0.8,  // Left side
+      NOZZLE_Z: 0,
     };
 
     let scene, camera, renderer;
     let rings = [];
     let posts = [];
+    let nozzleMesh;
     let jetting = false;
     let score = 0;
 
@@ -132,6 +136,7 @@
 
       createTank();
       createPosts();
+      createNozzle();
       createRings();
 
       // Controls
@@ -195,6 +200,19 @@
       });
     }
 
+    function createNozzle() {
+      // Water jet nozzle on left side
+      const nozzleGeo = new THREE.CylinderGeometry(0.1, 0.15, 0.3, 12);
+      const nozzleMat = new THREE.MeshStandardMaterial({
+        color: 0x94a3b8,
+        metalness: 0.8,
+        roughness: 0.2,
+      });
+      nozzleMesh = new THREE.Mesh(nozzleGeo, nozzleMat);
+      nozzleMesh.position.set(CONFIG.NOZZLE_X, 0.15, CONFIG.NOZZLE_Z);
+      scene.add(nozzleMesh);
+    }
+
     function createRings() {
       const colors = [0xff6b6b, 0xffd166, 0x06d6a0, 0x4cc9f0, 0xa78bfa, 0xf472b6];
 
@@ -207,9 +225,12 @@
         });
         const ringMesh = new THREE.Mesh(ringGeo, ringMat);
 
-        const startX = (i % 2 - 0.5) * 0.5;
-        const startY = 1 + i * 0.2;
-        const startZ = (Math.floor(i / 2) - 1) * 0.3;
+        // All rings start at bottom, spread around
+        const angle = (i / CONFIG.RING_COUNT) * Math.PI * 2;
+        const radius = 0.6;
+        const startX = Math.cos(angle) * radius;
+        const startY = 0.15;  // Just above floor
+        const startZ = Math.sin(angle) * radius * 0.5;
 
         ringMesh.position.set(startX, startY, startZ);
         ringMesh.castShadow = true;
@@ -237,15 +258,21 @@
         // Gravity
         ring.velocity.y += CONFIG.GRAVITY * dt;
 
-        // Jet force
+        // Jet force - from nozzle position
         if (jetting) {
-          const dx = pos.x;
-          const dy = pos.y;
-          const dz = pos.z;
+          const dx = pos.x - CONFIG.NOZZLE_X;
+          const dy = pos.y - 0.15;
+          const dz = pos.z - CONFIG.NOZZLE_Z;
           const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-          if (dist < 2) {
-            ring.velocity.y += CONFIG.JET_FORCE;
+          if (dist < CONFIG.JET_RADIUS) {
+            // Stronger jet when closer to nozzle
+            const jetPower = 1 - (dist / CONFIG.JET_RADIUS);
+            ring.velocity.y += CONFIG.JET_FORCE * jetPower;
+
+            // Slight outward spread
+            ring.velocity.x += dx * 0.1 * jetPower;
+            ring.velocity.z += dz * 0.1 * jetPower;
           }
         }
 
