@@ -279,7 +279,9 @@ const CONFIG = {
   GRAVITY: -8.0,         // Gravity - balanced for water
   BUOYANCY: 3.5,         // Light buoyancy - rings slowly settle
   WATER_DRAG: 0.92,      // Water resistance
-  JET_FORCE: 45,         // Stronger jet force
+  ANGULAR_DRAG: 0.85,    // Angular velocity damping (rings stop spinning)
+  FLATTEN_FORCE: 8.0,    // Force that makes rings orient flat
+  JET_FORCE: 100,        // Very strong jet force - sends rings flying
   JET_RADIUS: 0.8,       // Jet radius (smaller tank)
   POST_HEIGHT: 2.4,      // Smaller posts
   POST_RADIUS: 0.055,    // Smaller post radius
@@ -586,21 +588,23 @@ function updatePhysics(dt) {
       if (dist < CONFIG.JET_RADIUS) {
         const jetPower = 1 - (dist / CONFIG.JET_RADIUS);
         const holdTime = (Date.now() - jetStartTime) / 1000;
-        const powerMult = Math.min(1 + holdTime * 0.5, 2);
+        const powerMult = Math.min(1 + holdTime * 0.8, 2.5);
         const force = CONFIG.JET_FORCE * jetPower * powerMult;
 
-        // Upward jet force
+        // Upward jet force - very strong
         accelY += force / ring.mass;
 
-        // Spread rings outward slightly from jet center
-        accelX += (dx / dist) * force * 0.3 / ring.mass;
-        accelZ += (dz / dist) * force * 0.3 / ring.mass;
+        // Spread rings outward dramatically from jet center
+        if (dist > 0.01) {
+          accelX += (dx / dist) * force * 0.6 / ring.mass;
+          accelZ += (dz / dist) * force * 0.6 / ring.mass;
+        }
 
-        // Turbulence
-        accelX += (Math.random() - 0.5) * 4;
-        accelZ += (Math.random() - 0.5) * 4;
-        ring.angularVel.x += (Math.random() - 0.5) * 6 * dt;
-        ring.angularVel.z += (Math.random() - 0.5) * 6 * dt;
+        // Strong turbulence - chaotic water jet
+        accelX += (Math.random() - 0.5) * 8;
+        accelZ += (Math.random() - 0.5) * 8;
+        ring.angularVel.x += (Math.random() - 0.5) * 10 * dt;
+        ring.angularVel.z += (Math.random() - 0.5) * 10 * dt;
       }
     }
 
@@ -609,9 +613,29 @@ function updatePhysics(dt) {
     ring.velocity.y += accelY * dt;
     ring.velocity.z += accelZ * dt;
 
+    // Flatten force - rings naturally orient horizontally like real discs
+    // Get ring's current "up" normal (in local space, ring starts with normal pointing up in Y)
+    const ringNormal = new THREE.Vector3(0, 1, 0);
+    ringNormal.applyEuler(new THREE.Euler(ring.mesh.rotation.x, ring.mesh.rotation.y, ring.mesh.rotation.z));
+
+    // Target is straight up (Y-axis in tank's local space)
+    const targetUp = new THREE.Vector3(0, 1, 0);
+
+    // Calculate torque axis (cross product)
+    const torqueAxis = new THREE.Vector3().crossVectors(ringNormal, targetUp);
+    const angle = ringNormal.angleTo(targetUp);
+
+    // Apply corrective angular velocity (stronger when more tilted)
+    if (angle > 0.01) {
+      torqueAxis.normalize();
+      ring.angularVel.x += torqueAxis.x * angle * CONFIG.FLATTEN_FORCE * dt;
+      ring.angularVel.y += torqueAxis.y * angle * CONFIG.FLATTEN_FORCE * dt;
+      ring.angularVel.z += torqueAxis.z * angle * CONFIG.FLATTEN_FORCE * dt;
+    }
+
     // Water drag
     ring.velocity.multiplyScalar(Math.pow(CONFIG.WATER_DRAG, dt));
-    ring.angularVel.multiplyScalar(Math.pow(CONFIG.WATER_DRAG + 0.02, dt));
+    ring.angularVel.multiplyScalar(Math.pow(CONFIG.ANGULAR_DRAG, dt));
 
     // Update position
     pos.x += ring.velocity.x * dt;
