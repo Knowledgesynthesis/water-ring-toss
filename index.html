@@ -291,7 +291,7 @@
         quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
         ringBody.addShape(cylinderShape, new CANNON.Vec3(0, 0, 0), quat);
 
-        ringBody.position.copy(ringMesh.position);
+        ringBody.position.set(ringMesh.position.x, ringMesh.position.y, ringMesh.position.z);
         world.addBody(ringBody);
 
         rings.push({
@@ -326,8 +326,17 @@
 
       // Sync visual with physics
       rings.forEach(ring => {
-        ring.mesh.position.copy(ring.body.position);
-        ring.mesh.quaternion.copy(ring.body.quaternion);
+        ring.mesh.position.set(
+          ring.body.position.x,
+          ring.body.position.y,
+          ring.body.position.z
+        );
+        ring.mesh.quaternion.set(
+          ring.body.quaternion.x,
+          ring.body.quaternion.y,
+          ring.body.quaternion.z,
+          ring.body.quaternion.w
+        );
 
         // Check scoring
         if (!ring.scored) {
