@@ -2,986 +2,380 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="mobile-web-app-capable" content="yes" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Water Ring Toss 3D</title>
 <style>
-  :root{
-    --bg:#0a0e1a;
-    --glass: rgba(255,255,255,0.08);
-    --ink:#e5f0ff;
-    --good:#34d399;
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    overflow: hidden;
+    font-family: system-ui, sans-serif;
+    background: #0a0e1a;
+    color: #fff;
   }
-  *{box-sizing:border-box; margin:0; padding:0;}
-  html,body{
-    height:100%;
-    overflow:hidden;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: none;
-    font-family: system-ui,Segoe UI,Roboto,Inter,Ubuntu,Arial,sans-serif;
-  }
-  body{
-    background: radial-gradient(120% 120% at 50% 0%, #0b1327 10%, #071022 55%, #060a14 100%);
-    color:var(--ink);
+  #container { width: 100vw; height: 100vh; }
+  canvas { display: block; }
+
+  .hud {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 10;
+    font-size: 20px;
+    background: rgba(0,0,0,0.5);
+    padding: 15px;
+    border-radius: 10px;
   }
 
-  #container{
-    width:100vw;
-    height:100vh;
-    position:relative;
+  .controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
   }
 
-  canvas{
-    display:block;
-    width:100%;
-    height:100%;
+  .jet-btn {
+    width: 200px;
+    height: 80px;
+    font-size: 20px;
+    font-weight: bold;
+    background: #4a90e2;
+    border: none;
+    border-radius: 15px;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
   }
 
-  /* HUD */
-  .hud{
-    position:absolute;
-    top:0;
-    left:0;
-    right:0;
-    z-index:10;
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-    padding:clamp(12px, 2vh, 16px);
-    pointer-events:none;
-  }
-
-  .cluster{
-    display:flex;
-    gap:clamp(6px, 1vw, 10px);
-    pointer-events:auto;
-  }
-
-  .pill{
-    background: var(--glass);
-    backdrop-filter: blur(12px);
-    border:1px solid rgba(255,255,255,0.12);
-    padding:clamp(8px, 1.5vh, 12px) clamp(12px, 2vw, 16px);
-    border-radius:999px;
-    font-weight:600;
-    font-size:clamp(12px, 2.5vw, 15px);
-    display:flex;
-    align-items:center;
-    gap:clamp(6px, 1vw, 8px);
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-    min-height:clamp(36px, 5vh, 44px);
-    white-space:nowrap;
-  }
-
-  .score{color:var(--good)}
-
-  .btn{
-    background: var(--glass);
-    backdrop-filter: blur(12px);
-    border:1px solid rgba(255,255,255,0.15);
-    color:var(--ink);
-    padding:clamp(8px, 1.5vh, 12px) clamp(12px, 2vw, 16px);
-    border-radius:clamp(10px, 2vw, 12px);
-    cursor:pointer;
-    font-weight:600;
-    font-size:clamp(12px, 2.5vw, 14px);
-    display:inline-flex;
-    align-items:center;
-    gap:clamp(6px, 1vw, 8px);
-    transition:transform .1s ease, background .15s ease;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-    min-height:clamp(38px, 5.5vh, 46px);
-    white-space:nowrap;
-  }
-  .btn:active{transform: translateY(1px)}
-  .btn:hover{background: rgba(255,255,255,0.12)}
-
-  .btn-text{display:inline}
-  @media (max-width: 450px), (max-height: 650px) {
-    .btn-text{display:none}
-  }
-
-  /* Controls */
-  .controls{
-    position:absolute;
-    bottom:0;
-    left:0;
-    right:0;
-    z-index:10;
-    padding:clamp(12px, 2vh, 20px);
-    display:flex;
-    flex-direction:column;
-    gap:clamp(8px, 1.5vh, 12px);
-  }
-
-  .info-row{
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    font-size:clamp(10px, 2vw, 12px);
-    opacity:0.75;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.7);
-  }
-
-  .jet-btn{
-    width:100%;
-    height:clamp(60px, 13vh, 90px);
-    background: radial-gradient(ellipse at center top, rgba(100,200,255,0.5), rgba(50,150,230,0.4) 50%, rgba(20,80,150,0.3));
-    border:2px solid rgba(150,220,255,0.4);
-    border-radius:999px;
-    color:#fff;
-    font-size:clamp(16px, 3.5vw, 20px);
-    font-weight:800;
-    letter-spacing:0.5px;
-    cursor:pointer;
-    user-select:none;
-    touch-action:none;
-    box-shadow:
-      inset 0 -12px 24px rgba(0,0,0,0.3),
-      0 8px 32px rgba(0,0,0,0.4),
-      0 0 0 1px rgba(255,255,255,0.1) inset;
-    transition: all 0.1s ease;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
-    position:relative;
-    overflow:hidden;
-  }
-
-  .jet-btn::before{
-    content:'';
-    position:absolute;
-    inset:0;
-    background: radial-gradient(ellipse at center, rgba(255,255,255,0.2), transparent 60%);
-    opacity:0;
-    transition: opacity 0.15s ease;
-  }
-
-  .jet-btn:active,
-  .jet-btn.active{
+  .jet-btn:active {
+    background: #6ba5e7;
     transform: translateY(2px);
-    background: radial-gradient(ellipse at center top, rgba(120,220,255,0.7), rgba(70,170,250,0.6) 50%, rgba(40,100,180,0.5));
-    border-color: rgba(180,240,255,0.6);
-    box-shadow:
-      inset 0 -18px 32px rgba(0,0,0,0.4),
-      0 4px 20px rgba(0,0,0,0.5),
-      0 0 0 1px rgba(255,255,255,0.15) inset,
-      0 0 30px rgba(100,200,255,0.3);
   }
 
-  .jet-btn.active::before{
-    opacity:1;
-  }
-
-  /* Overlay */
-  .overlay{
-    position:absolute;
-    inset:0;
-    z-index:20;
-    display:none;
-    place-items:center;
-    background: rgba(0,0,0,0.65);
-    backdrop-filter: blur(8px);
-    padding:clamp(20px, 5vw, 32px);
-  }
-  .overlay.show{display:grid}
-
-  .card{
-    background: rgba(15,25,45,0.95);
-    border:1px solid rgba(255,255,255,0.15);
-    border-radius:clamp(16px, 3vw, 20px);
-    padding:clamp(24px, 5vw, 32px);
-    text-align:center;
-    max-width:90%;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-  }
-
-  .card h2{
-    margin:0 0 clamp(8px, 2vh, 12px) 0;
-    font-size:clamp(22px, 5vw, 28px);
-  }
-
-  .card p{
-    margin:0;
-    opacity:0.85;
-    font-size:clamp(14px, 3vw, 17px);
-    line-height:1.5;
-  }
-
-  /* Icons */
-  .icon{
-    width:clamp(16px, 3.5vw, 20px);
-    height:clamp(16px, 3.5vw, 20px);
-    display:inline-block;
-    background:currentColor;
-    -webkit-mask-size:contain;
-    mask-size:contain;
-    -webkit-mask-repeat:no-repeat;
-    mask-repeat:no-repeat;
-    -webkit-mask-position:center;
-    mask-position:center;
-    flex-shrink:0;
-  }
-
-  .i-reset{-webkit-mask-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M12 6v3l4-4-4-4v3C6.48 4 2 8.48 2 14s4.48 10 10 10 10-4.48 10-10h-2c0 4.41-3.59 8-8 8S4 18.41 4 14 7.59 6 12 6z"/></svg>')}
-  .i-pause{-webkit-mask-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>')}
-  .i-play{-webkit-mask-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M8 5v14l11-7z"/></svg>')}
-  .i-mute{-webkit-mask-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M16.5 12l3.5 3.5-1.5 1.5L15 13.5 11.5 17l-1.5-1.5L12 12 9 9l1.5-1.5L15 10.5l3.5-3.5L20 8.5zM3 9v6h4l5 5V4L7 9H3z"/></svg>')}
-  .i-sound{-webkit-mask-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zm-2.5-8v2a8 8 0 0 1 0 12v2c3.87-1.17 6.7-4.78 6.7-9s-2.83-7.83-6.7-9z"/></svg>')}
-
-  @media (prefers-reduced-motion: reduce){
-    *{transition:none !important}
+  .reset-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    padding: 12px 24px;
+    font-size: 16px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
   }
 </style>
 </head>
 <body>
   <div id="container"></div>
 
-  <!-- HUD -->
   <div class="hud">
-    <div class="cluster">
-      <div class="pill score">Score: <span id="scoreVal">0</span></div>
-    </div>
-    <div class="cluster">
-      <button class="btn" id="resetBtn"><span class="icon i-reset"></span> <span class="btn-text">Reset</span></button>
-      <button class="btn" id="pauseBtn"><span class="icon i-pause" id="pauseIcon"></span> <span class="btn-text" id="pauseText">Pause</span></button>
-      <button class="btn" id="muteBtn"><span class="icon i-sound" id="muteIcon"></span> <span class="btn-text" id="muteText">Sound</span></button>
-    </div>
+    Score: <span id="score">0</span>
   </div>
 
-  <!-- Controls -->
+  <button class="reset-btn" onclick="resetGame()">Reset</button>
+
   <div class="controls">
-    <div class="info-row">
-      <span>Hold button to jet • Arrow keys or tilt device to move</span>
-    </div>
     <button class="jet-btn" id="jetBtn">HOLD TO JET</button>
   </div>
 
-  <!-- Pause Overlay -->
-  <div class="overlay" id="pauseOverlay">
-    <div class="card">
-      <h2>Paused</h2>
-      <p>Press <b>P</b> or tap <b>Resume</b> to continue.</p>
-    </div>
-  </div>
-
-  <!-- Audio -->
-  <audio id="sndBubble" preload="auto" src="data:audio/wav;base64,UklGRlYAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAABAAACAAAASAAAAEAAAFRkYXRhKAAAAAD8//8AAP7//wAA/v//AAD8//8AAPz//wAA/v//AAD+//8AAP3//wAA"></audio>
-  <audio id="sndScore" preload="auto" src="data:audio/wav;base64,UklGRmIAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAABAAACAAAASAAAAEAAAFRkYXRhigAAAAD/AP//gAD//wAA//8AAP//AAD//wAA/4AAAP//AAD//wAA//8AAP+AAAD//wAA"></audio>
-
-  <!-- Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-
-  <!-- Cannon-es Physics Engine -->
   <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
 
   <script>
-/* ========================== CONFIG ========================== */
-const CONFIG = {
-  COLORS: [0xff6b6b, 0xffd166, 0x06d6a0, 0x4cc9f0, 0xa78bfa, 0xf472b6],
-  RING_COUNT: 12,
-  GRAVITY: -9.81,        // Real gravity
-  WATER_LINEAR_DRAG: 0.5,   // Linear velocity damping (water resistance)
-  WATER_ANGULAR_DRAG: 0.3,  // Angular velocity damping
-  JET_FORCE: 200,        // Strong jet impulse
-  JET_RADIUS: 0.8,
-  POST_HEIGHT: 2.4,
-  POST_RADIUS: 0.055,
-  RING_OUTER_R: 0.24,
-  RING_INNER_R: 0.18,
-  RING_THICKNESS: 0.04,
-  RING_MASS: 0.1,        // Light plastic rings
-  TANK_WIDTH: 2.6,
-  TANK_HEIGHT: 4.0,
-  TANK_DEPTH: 1.0,
-  MAX_TILT_ANGLE: Math.PI / 4,  // 45 degrees
-  NOZZLE_X: -0.8,
-  NOZZLE_Z: 0.4,
-};
+    // Configuration
+    const CONFIG = {
+      TANK_WIDTH: 3,
+      TANK_HEIGHT: 4,
+      TANK_DEPTH: 1.5,
+      RING_COUNT: 6,
+      RING_RADIUS: 0.2,
+      RING_THICKNESS: 0.05,
+      POST_HEIGHT: 2.5,
+      POST_RADIUS: 0.06,
+      JET_FORCE: 15,
+    };
 
-/* ========================== GLOBALS ========================== */
-let scene, camera, renderer, container;
-let world;  // Cannon.js physics world
-let gameContainer;  // Three.js container for tilt
-let rings = [], posts = [];
-let waterLevel = CONFIG.TANK_HEIGHT * 0.75;
-let jetting = false, jetStartTime = 0;
-let score = 0;
-let paused = false, muted = false, running = true;
-let clock = new THREE.Clock();
-let tankMesh, waterMesh, nozzleMesh;
-let jetParticles = [];
-let tiltX = 0, tiltZ = 0;
+    // Three.js scene
+    let scene, camera, renderer;
+    let rings = [];
+    let posts = [];
+    let jetting = false;
+    let score = 0;
 
-/* ========================== PHYSICS SETUP ========================== */
-function initPhysics() {
-  world = new CANNON.World({
-    gravity: new CANNON.Vec3(0, CONFIG.GRAVITY, 0)
-  });
+    // Cannon.js physics world
+    let world;
+    let groundBody;
 
-  // Broadphase for better performance
-  world.broadphase = new CANNON.NaiveBroadphase();
+    function init() {
+      // Create Three.js scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1a2e);
+      scene.fog = new THREE.Fog(0x1a1a2e, 5, 15);
 
-  // Default contact material
-  const defaultMaterial = new CANNON.Material('default');
-  const contactMaterial = new CANNON.ContactMaterial(defaultMaterial, defaultMaterial, {
-    friction: 0.3,
-    restitution: 0.2,  // Low bounce
-  });
-  world.addContactMaterial(contactMaterial);
-  world.defaultContactMaterial = contactMaterial;
+      // Camera
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(0, 3, 6);
+      camera.lookAt(0, 2, 0);
 
-  // Tank floor
-  const floorShape = new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, 0.1, CONFIG.TANK_DEPTH/2));
-  const floorBody = new CANNON.Body({ mass: 0 });
-  floorBody.addShape(floorShape);
-  floorBody.position.set(0, 0, 0);
-  world.addBody(floorBody);
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      document.getElementById('container').appendChild(renderer.domElement);
 
-  // Tank walls
-  const wallThickness = 0.1;
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+      scene.add(ambientLight);
 
-  // Left wall
-  const leftWallShape = new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH/2));
-  const leftWall = new CANNON.Body({ mass: 0 });
-  leftWall.addShape(leftWallShape);
-  leftWall.position.set(-CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT/2, 0);
-  world.addBody(leftWall);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(5, 10, 5);
+      dirLight.castShadow = true;
+      dirLight.shadow.camera.left = -5;
+      dirLight.shadow.camera.right = 5;
+      dirLight.shadow.camera.top = 5;
+      dirLight.shadow.camera.bottom = -5;
+      scene.add(dirLight);
 
-  // Right wall
-  const rightWallShape = new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH/2));
-  const rightWall = new CANNON.Body({ mass: 0 });
-  rightWall.addShape(rightWallShape);
-  rightWall.position.set(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT/2, 0);
-  world.addBody(rightWall);
+      // Initialize physics
+      initPhysics();
 
-  // Front wall
-  const frontWallShape = new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT, wallThickness));
-  const frontWall = new CANNON.Body({ mass: 0 });
-  frontWall.addShape(frontWallShape);
-  frontWall.position.set(0, CONFIG.TANK_HEIGHT/2, CONFIG.TANK_DEPTH/2);
-  world.addBody(frontWall);
+      // Create game objects
+      createTank();
+      createPosts();
+      createRings();
 
-  // Back wall
-  const backWallShape = new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT, wallThickness));
-  const backWall = new CANNON.Body({ mass: 0 });
-  backWall.addShape(backWallShape);
-  backWall.position.set(0, CONFIG.TANK_HEIGHT/2, -CONFIG.TANK_DEPTH/2);
-  world.addBody(backWall);
-}
+      // Controls
+      const jetBtn = document.getElementById('jetBtn');
+      jetBtn.addEventListener('pointerdown', () => jetting = true);
+      jetBtn.addEventListener('pointerup', () => jetting = false);
+      jetBtn.addEventListener('pointerleave', () => jetting = false);
 
-/* ========================== THREE.JS SETUP ========================== */
-function initThree() {
-  container = document.getElementById('container');
+      // Start animation
+      animate();
 
-  // Scene
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a0e1a);
-  scene.fog = new THREE.Fog(0x0a0e1a, 8, 16);
-
-  // Camera
-  const aspect = window.innerWidth / window.innerHeight;
-  camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 100);
-  camera.position.set(0, 2.5, 5);
-  camera.lookAt(0, 1.8, 0);
-
-  // Renderer
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  container.appendChild(renderer.domElement);
-
-  // Lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-  scene.add(ambientLight);
-
-  const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  mainLight.position.set(3, 6, 4);
-  mainLight.castShadow = true;
-  mainLight.shadow.camera.left = -5;
-  mainLight.shadow.camera.right = 5;
-  mainLight.shadow.camera.top = 8;
-  mainLight.shadow.camera.bottom = -2;
-  mainLight.shadow.mapSize.width = 2048;
-  mainLight.shadow.mapSize.height = 2048;
-  scene.add(mainLight);
-
-  const fillLight = new THREE.DirectionalLight(0x7dd3fc, 0.3);
-  fillLight.position.set(-3, 2, -2);
-  scene.add(fillLight);
-
-  const rimLight = new THREE.PointLight(0xa78bfa, 0.5, 10);
-  rimLight.position.set(0, 5, -3);
-  scene.add(rimLight);
-
-  // Create game container (visual tilt, physics world stays upright)
-  gameContainer = new THREE.Group();
-  scene.add(gameContainer);
-
-  // Create visuals
-  createTank();
-  createPosts();
-  createNozzle();
-
-  // Window resize
-  window.addEventListener('resize', onResize);
-}
-
-/* ========================== TANK CREATION ========================== */
-function createTank() {
-  // Glass tank walls (transparent)
-  const tankGeo = new THREE.BoxGeometry(CONFIG.TANK_WIDTH, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH);
-  const tankMat = new THREE.MeshPhysicalMaterial({
-    color: 0x88ccff,
-    transparent: true,
-    opacity: 0.15,
-    metalness: 0.1,
-    roughness: 0.1,
-    transmission: 0.9,
-    thickness: 0.5,
-  });
-  tankMesh = new THREE.Mesh(tankGeo, tankMat);
-  tankMesh.position.y = CONFIG.TANK_HEIGHT / 2;
-  gameContainer.add(tankMesh);
-
-  // Tank frame (edges)
-  const edges = new THREE.EdgesGeometry(tankGeo);
-  const lineMat = new THREE.LineBasicMaterial({ color: 0x4dd4ff, linewidth: 2 });
-  const frame = new THREE.LineSegments(edges, lineMat);
-  tankMesh.add(frame);
-
-  // Water surface
-  const waterGeo = new THREE.PlaneGeometry(CONFIG.TANK_WIDTH * 0.98, CONFIG.TANK_DEPTH * 0.98);
-  const waterMat = new THREE.MeshPhysicalMaterial({
-    color: 0x0088cc,
-    transparent: true,
-    opacity: 0.6,
-    metalness: 0.2,
-    roughness: 0.2,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.1,
-  });
-  waterMesh = new THREE.Mesh(waterGeo, waterMat);
-  waterMesh.rotation.x = -Math.PI / 2;
-  waterMesh.position.y = waterLevel;
-  waterMesh.receiveShadow = true;
-  gameContainer.add(waterMesh);
-
-  // Base platform
-  const baseGeo = new THREE.BoxGeometry(CONFIG.TANK_WIDTH, 0.2, CONFIG.TANK_DEPTH);
-  const baseMat = new THREE.MeshStandardMaterial({
-    color: 0x1a2332,
-    metalness: 0.4,
-    roughness: 0.6,
-  });
-  const base = new THREE.Mesh(baseGeo, baseMat);
-  base.position.y = -0.1;
-  base.receiveShadow = true;
-  gameContainer.add(base);
-}
-
-/* ========================== POSTS CREATION ========================== */
-function createPosts() {
-  const postGeo = new THREE.CylinderGeometry(
-    CONFIG.POST_RADIUS,
-    CONFIG.POST_RADIUS * 1.3,
-    CONFIG.POST_HEIGHT,
-    16
-  );
-  const postMat = new THREE.MeshStandardMaterial({
-    color: 0xc7d2fe,
-    metalness: 0.6,
-    roughness: 0.3,
-    emissive: 0x6366f1,
-    emissiveIntensity: 0.2,
-  });
-
-  const spacing = 0.5;
-  const yPos = CONFIG.POST_HEIGHT / 2;
-
-  [-spacing/2, spacing/2].forEach(x => {
-    const post = new THREE.Mesh(postGeo, postMat.clone());
-    post.position.set(x, yPos, 0);
-    post.castShadow = true;
-    post.receiveShadow = true;
-    gameContainer.add(post);
-
-    // Post physics body (static cylinder)
-    const postShape = new CANNON.Cylinder(CONFIG.POST_RADIUS * 1.3, CONFIG.POST_RADIUS, CONFIG.POST_HEIGHT, 16);
-    const postBody = new CANNON.Body({
-      mass: 0,
-    });
-    postBody.addShape(postShape);
-    postBody.position.set(x, yPos, 0);
-    world.addBody(postBody);
-
-    posts.push({
-      mesh: post,
-      body: postBody,
-      x: x,
-      z: 0,
-      topY: CONFIG.POST_HEIGHT,
-      glowTime: 0,
-    });
-
-    // Top cap
-    const capGeo = new THREE.SphereGeometry(CONFIG.POST_RADIUS * 1.4, 16, 12);
-    const cap = new THREE.Mesh(capGeo, postMat);
-    cap.position.y = CONFIG.POST_HEIGHT / 2;
-    post.add(cap);
-  });
-}
-
-/* ========================== NOZZLE ========================== */
-function createNozzle() {
-  const nozzleGeo = new THREE.CylinderGeometry(0.15, 0.2, 0.3, 12);
-  const nozzleMat = new THREE.MeshStandardMaterial({
-    color: 0x94a3b8,
-    metalness: 0.8,
-    roughness: 0.2,
-  });
-  nozzleMesh = new THREE.Mesh(nozzleGeo, nozzleMat);
-  nozzleMesh.position.set(CONFIG.NOZZLE_X, 0.1, CONFIG.NOZZLE_Z);
-  gameContainer.add(nozzleMesh);
-}
-
-/* ========================== RING CREATION ========================== */
-function createRing(x, y, z, colorHex) {
-  // Three.js visual (torus shape)
-  const shape = new THREE.Shape();
-  shape.absarc(0, 0, CONFIG.RING_OUTER_R, 0, Math.PI * 2, false);
-
-  const holePath = new THREE.Path();
-  holePath.absarc(0, 0, CONFIG.RING_INNER_R, 0, Math.PI * 2, true);
-  shape.holes.push(holePath);
-
-  const extrudeSettings = {
-    depth: CONFIG.RING_THICKNESS,
-    bevelEnabled: true,
-    bevelThickness: 0.01,
-    bevelSize: 0.01,
-    bevelSegments: 3,
-  };
-
-  const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  const material = new THREE.MeshStandardMaterial({
-    color: colorHex,
-    metalness: 0.3,
-    roughness: 0.4,
-    emissive: colorHex,
-    emissiveIntensity: 0.15,
-  });
-
-  const ring = new THREE.Mesh(geometry, material);
-  ring.rotation.x = Math.PI / 2;
-  ring.position.set(x, y, z);
-  ring.castShadow = true;
-  ring.receiveShadow = true;
-  gameContainer.add(ring);
-
-  // Cannon.js physics body (cylinder approximation - much more stable than torus)
-  const ringRadius = (CONFIG.RING_OUTER_R + CONFIG.RING_INNER_R) / 2;
-  const cylinderShape = new CANNON.Cylinder(ringRadius, ringRadius, CONFIG.RING_THICKNESS, 16);
-
-  const ringBody = new CANNON.Body({
-    mass: CONFIG.RING_MASS,
-    linearDamping: CONFIG.WATER_LINEAR_DRAG,
-    angularDamping: CONFIG.WATER_ANGULAR_DRAG,
-  });
-
-  // Rotate cylinder shape to be horizontal (Cannon cylinders are Y-axis by default)
-  const quat = new CANNON.Quaternion();
-  quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
-  ringBody.addShape(cylinderShape, new CANNON.Vec3(0, 0, 0), quat);
-  ringBody.position.set(x, y, z);
-
-  world.addBody(ringBody);
-
-  return {
-    mesh: ring,
-    body: ringBody,
-    scored: false,
-    hooked: false,
-    hookedPost: null,
-    color: colorHex,
-  };
-}
-
-/* ========================== SPAWN RINGS ========================== */
-function spawnInitialRings() {
-  // Remove old rings
-  rings.forEach(r => {
-    gameContainer.remove(r.mesh);
-    world.removeBody(r.body);
-  });
-  rings = [];
-
-  const rows = 3;
-  const cols = 4;
-  const startZ = -0.5;
-  const spacing = 0.3;
-
-  for (let i = 0; i < CONFIG.RING_COUNT; i++) {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
-    const x = (col - cols / 2 + 0.5) * spacing;
-    const z = startZ - row * spacing;
-    const y = waterLevel - 0.8 - row * 0.15;
-
-    const ring = createRing(x, y, z, CONFIG.COLORS[i % CONFIG.COLORS.length]);
-    rings.push(ring);
-  }
-}
-
-/* ========================== PHYSICS UPDATE ========================== */
-function updatePhysics(dt) {
-  if (dt > 0.1) dt = 0.1; // Cap delta time
-
-  // Update physics world gravity based on tilt
-  const tiltRotation = new THREE.Quaternion();
-  tiltRotation.setFromEuler(new THREE.Euler(
-    tiltZ * CONFIG.MAX_TILT_ANGLE,
-    0,
-    -tiltX * CONFIG.MAX_TILT_ANGLE
-  ));
-
-  const baseGravity = new THREE.Vector3(0, CONFIG.GRAVITY, 0);
-  baseGravity.applyQuaternion(tiltRotation);
-
-  world.gravity.set(baseGravity.x, baseGravity.y, baseGravity.z);
-
-  // Apply jet forces
-  if (jetting) {
-    const nozzlePos = new CANNON.Vec3(CONFIG.NOZZLE_X, 0.1, CONFIG.NOZZLE_Z);
-    const holdTime = (Date.now() - jetStartTime) / 1000;
-    const powerMult = Math.min(1 + holdTime * 0.8, 2.5);
-
-    rings.forEach(ring => {
-      if (ring.hooked) return;
-
-      const ringPos = ring.body.position;
-      const dx = ringPos.x - nozzlePos.x;
-      const dy = ringPos.y - nozzlePos.y;
-      const dz = ringPos.z - nozzlePos.z;
-      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-
-      if (dist < CONFIG.JET_RADIUS) {
-        const jetPower = 1 - (dist / CONFIG.JET_RADIUS);
-        const force = CONFIG.JET_FORCE * jetPower * powerMult;
-
-        // Apply upward force
-        const impulse = new CANNON.Vec3(
-          dx * force * 0.3 * dt,
-          force * dt,
-          dz * force * 0.3 * dt
-        );
-        ring.body.applyImpulse(impulse, ring.body.position);
-
-        // Turbulence
-        const turbulence = new CANNON.Vec3(
-          (Math.random() - 0.5) * 4 * dt,
-          0,
-          (Math.random() - 0.5) * 4 * dt
-        );
-        ring.body.applyImpulse(turbulence, ring.body.position);
-      }
-    });
-  }
-
-  // Step physics simulation
-  world.step(1/60, dt, 3);
-
-  // Sync Three.js meshes with Cannon.js bodies
-  rings.forEach(ring => {
-    if (ring.hooked) {
-      // Smooth movement to hooked position
-      const post = ring.hookedPost;
-      const targetY = post.topY - 0.15;
-
-      ring.body.position.x += (post.x - ring.body.position.x) * 0.1;
-      ring.body.position.y += (targetY - ring.body.position.y) * 0.1;
-      ring.body.position.z += (post.z - ring.body.position.z) * 0.1;
-
-      ring.body.velocity.set(0, 0, 0);
-      ring.body.angularVelocity.set(0, 0, 0);
+      // Window resize
+      window.addEventListener('resize', onResize);
     }
 
-    // Sync visual mesh with physics body
-    ring.mesh.position.copy(ring.body.position);
-    ring.mesh.quaternion.copy(ring.body.quaternion);
-  });
+    function initPhysics() {
+      world = new CANNON.World();
+      world.gravity.set(0, -9.82, 0);
 
-  // Check for scoring
-  rings.forEach(ring => {
-    if (ring.scored || ring.hooked) return;
+      // Ground
+      const groundShape = new CANNON.Plane();
+      groundBody = new CANNON.Body({ mass: 0 });
+      groundBody.addShape(groundShape);
+      groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+      world.addBody(groundBody);
 
-    posts.forEach(post => {
-      const dx = ring.body.position.x - post.x;
-      const dz = ring.body.position.z - post.z;
-      const dist2D = Math.sqrt(dx*dx + dz*dz);
+      // Tank walls
+      const wallThickness = 0.2;
 
-      // Check if ring is around post and near top
-      if (dist2D < CONFIG.RING_INNER_R &&
-          ring.body.position.y > post.topY - 0.5 &&
-          ring.body.position.y < post.topY) {
+      // Left wall
+      const leftWall = new CANNON.Body({ mass: 0 });
+      leftWall.addShape(new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH)));
+      leftWall.position.set(-CONFIG.TANK_WIDTH / 2, CONFIG.TANK_HEIGHT / 2, 0);
+      world.addBody(leftWall);
 
-        const speed = ring.body.velocity.length();
-        if (speed < 2) {  // Slow enough to hook
-          ring.scored = true;
-          ring.hooked = true;
-          ring.hookedPost = post;
-          score += 1;
-          document.getElementById('scoreVal').textContent = score;
-          playSound('sndScore', 0.7);
+      // Right wall
+      const rightWall = new CANNON.Body({ mass: 0 });
+      rightWall.addShape(new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH)));
+      rightWall.position.set(CONFIG.TANK_WIDTH / 2, CONFIG.TANK_HEIGHT / 2, 0);
+      world.addBody(rightWall);
 
-          // Glow effect
-          post.glowTime = 0.8;
-          post.mesh.material.emissiveIntensity = 0.8;
+      // Front wall
+      const frontWall = new CANNON.Body({ mass: 0 });
+      frontWall.addShape(new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH, CONFIG.TANK_HEIGHT, wallThickness)));
+      frontWall.position.set(0, CONFIG.TANK_HEIGHT / 2, CONFIG.TANK_DEPTH / 2);
+      world.addBody(frontWall);
+
+      // Back wall
+      const backWall = new CANNON.Body({ mass: 0 });
+      backWall.addShape(new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH, CONFIG.TANK_HEIGHT, wallThickness)));
+      backWall.position.set(0, CONFIG.TANK_HEIGHT / 2, -CONFIG.TANK_DEPTH / 2);
+      world.addBody(backWall);
+    }
+
+    function createTank() {
+      // Glass tank
+      const tankGeo = new THREE.BoxGeometry(CONFIG.TANK_WIDTH, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH);
+      const tankMat = new THREE.MeshPhysicalMaterial({
+        color: 0x88ccff,
+        transparent: true,
+        opacity: 0.2,
+        metalness: 0,
+        roughness: 0.1,
+      });
+      const tank = new THREE.Mesh(tankGeo, tankMat);
+      tank.position.y = CONFIG.TANK_HEIGHT / 2;
+      scene.add(tank);
+
+      // Edges
+      const edges = new THREE.EdgesGeometry(tankGeo);
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0x4dd4ff });
+      const wireframe = new THREE.LineSegments(edges, edgeMat);
+      tank.add(wireframe);
+
+      // Floor
+      const floorGeo = new THREE.PlaneGeometry(CONFIG.TANK_WIDTH, CONFIG.TANK_DEPTH);
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      scene.add(floor);
+    }
+
+    function createPosts() {
+      const postGeo = new THREE.CylinderGeometry(CONFIG.POST_RADIUS, CONFIG.POST_RADIUS, CONFIG.POST_HEIGHT, 16);
+      const postMat = new THREE.MeshStandardMaterial({
+        color: 0x8b5cf6,
+        metalness: 0.5,
+        roughness: 0.3,
+      });
+
+      const positions = [-0.3, 0.3];
+      positions.forEach(x => {
+        const post = new THREE.Mesh(postGeo, postMat);
+        post.position.set(x, CONFIG.POST_HEIGHT / 2, 0);
+        post.castShadow = true;
+        scene.add(post);
+
+        // Physics body
+        const postBody = new CANNON.Body({ mass: 0 });
+        postBody.addShape(new CANNON.Cylinder(CONFIG.POST_RADIUS, CONFIG.POST_RADIUS, CONFIG.POST_HEIGHT, 16));
+        postBody.position.set(x, CONFIG.POST_HEIGHT / 2, 0);
+        world.addBody(postBody);
+
+        posts.push({
+          mesh: post,
+          body: postBody,
+          x: x,
+          topY: CONFIG.POST_HEIGHT
+        });
+      });
+    }
+
+    function createRings() {
+      rings = [];
+      const colors = [0xff6b6b, 0xffd166, 0x06d6a0, 0x4cc9f0, 0xa78bfa, 0xf472b6];
+
+      for (let i = 0; i < CONFIG.RING_COUNT; i++) {
+        // Visual ring (torus)
+        const ringGeo = new THREE.TorusGeometry(CONFIG.RING_RADIUS, CONFIG.RING_THICKNESS, 16, 32);
+        const ringMat = new THREE.MeshStandardMaterial({
+          color: colors[i % colors.length],
+          metalness: 0.3,
+          roughness: 0.4,
+        });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.position.set(
+          (i % 2 - 0.5) * 0.5,
+          1 + i * 0.2,
+          (Math.floor(i / 2) - 1) * 0.3
+        );
+        ringMesh.castShadow = true;
+        scene.add(ringMesh);
+
+        // Physics body (cylinder shape lying flat)
+        const ringBody = new CANNON.Body({
+          mass: 0.05,
+          linearDamping: 0.5,
+          angularDamping: 0.5,
+        });
+
+        // Create cylinder and rotate it to be horizontal
+        const cylinderShape = new CANNON.Cylinder(CONFIG.RING_RADIUS, CONFIG.RING_RADIUS, CONFIG.RING_THICKNESS, 16);
+        const quat = new CANNON.Quaternion();
+        quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
+        ringBody.addShape(cylinderShape, new CANNON.Vec3(0, 0, 0), quat);
+
+        ringBody.position.copy(ringMesh.position);
+        world.addBody(ringBody);
+
+        rings.push({
+          mesh: ringMesh,
+          body: ringBody,
+          scored: false
+        });
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Step physics
+      world.step(1 / 60);
+
+      // Apply jet force
+      if (jetting) {
+        rings.forEach(ring => {
+          if (ring.scored) return;
+
+          const dx = ring.body.position.x;
+          const dy = ring.body.position.y;
+          const dz = ring.body.position.z;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+          if (dist < 1.5) {
+            ring.body.applyForce(new CANNON.Vec3(0, CONFIG.JET_FORCE, 0), ring.body.position);
+          }
+        });
+      }
+
+      // Sync visual with physics
+      rings.forEach(ring => {
+        ring.mesh.position.copy(ring.body.position);
+        ring.mesh.quaternion.copy(ring.body.quaternion);
+
+        // Check scoring
+        if (!ring.scored) {
+          posts.forEach(post => {
+            const dx = ring.body.position.x - post.x;
+            const dz = ring.body.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+
+            if (dist < CONFIG.RING_RADIUS && ring.body.position.y > post.topY - 0.3 && ring.body.position.y < post.topY) {
+              if (ring.body.velocity.length() < 1) {
+                ring.scored = true;
+                score++;
+                document.getElementById('score').textContent = score;
+
+                // Lock ring to post
+                ring.body.velocity.set(0, 0, 0);
+                ring.body.angularVelocity.set(0, 0, 0);
+                ring.body.position.set(post.x, post.topY - 0.2, 0);
+              }
+            }
+          });
         }
-      }
-    });
-  });
+      });
 
-  // Update post glow
-  posts.forEach(post => {
-    if (post.glowTime > 0) {
-      post.glowTime -= dt;
-      post.mesh.material.emissiveIntensity = Math.max(0.2, post.glowTime);
-    }
-  });
-
-  // Update particles
-  updateJetParticles(dt);
-}
-
-/* ========================== JET PARTICLES ========================== */
-function spawnJetParticles() {
-  if (!jetting || paused) return;
-
-  const particleGeo = new THREE.SphereGeometry(0.04, 6, 6);
-  const particleMat = new THREE.MeshBasicMaterial({
-    color: 0xe0f2fe,
-    transparent: true,
-    opacity: 0.7,
-  });
-
-  for (let i = 0; i < 3; i++) {
-    const particle = new THREE.Mesh(particleGeo, particleMat.clone());
-    const nozzlePos = nozzleMesh.position;
-    particle.position.set(
-      nozzlePos.x + (Math.random() - 0.5) * 0.2,
-      nozzlePos.y + 0.15,
-      nozzlePos.z + (Math.random() - 0.5) * 0.2
-    );
-    gameContainer.add(particle);
-
-    jetParticles.push({
-      mesh: particle,
-      velocity: new THREE.Vector3(
-        (Math.random() - 0.5) * 1,
-        2 + Math.random() * 2,
-        (Math.random() - 0.5) * 1
-      ),
-      life: 1.0,
-      age: 0,
-    });
-  }
-}
-
-function updateJetParticles(dt) {
-  jetParticles = jetParticles.filter(p => {
-    p.age += dt;
-    if (p.age >= p.life) {
-      gameContainer.remove(p.mesh);
-      return false;
+      renderer.render(scene, camera);
     }
 
-    p.velocity.y += CONFIG.GRAVITY * 0.3 * dt;
-    p.mesh.position.add(p.velocity.clone().multiplyScalar(dt));
+    function resetGame() {
+      // Remove old rings
+      rings.forEach(ring => {
+        scene.remove(ring.mesh);
+        world.removeBody(ring.body);
+      });
 
-    const alpha = 1 - p.age / p.life;
-    p.mesh.material.opacity = alpha * 0.7;
+      score = 0;
+      document.getElementById('score').textContent = score;
 
-    return true;
-  });
-}
-
-/* ========================== GAME LOOP ========================== */
-let lastParticleTime = 0;
-
-function animate() {
-  if (!running) return;
-  requestAnimationFrame(animate);
-
-  const dt = Math.min(clock.getDelta(), 0.033);
-
-  if (!paused) {
-    // Rotate visual container based on tilt (physics gravity handles actual tilt)
-    const targetRotationZ = -tiltX * CONFIG.MAX_TILT_ANGLE;
-    const targetRotationX = tiltZ * CONFIG.MAX_TILT_ANGLE;
-
-    gameContainer.rotation.z += (targetRotationZ - gameContainer.rotation.z) * 0.1;
-    gameContainer.rotation.x += (targetRotationX - gameContainer.rotation.x) * 0.1;
-
-    updatePhysics(dt);
-
-    // Spawn jet particles
-    if (jetting && Date.now() - lastParticleTime > 50) {
-      spawnJetParticles();
-      lastParticleTime = Date.now();
-      if (!muted && Math.random() > 0.7) {
-        playSound('sndBubble', 0.25);
-      }
+      createRings();
     }
 
-    // Water animation
-    waterMesh.position.y = waterLevel + Math.sin(Date.now() * 0.002) * 0.02;
-  }
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
 
-  renderer.render(scene, camera);
-}
-
-/* ========================== CONTROLS ========================== */
-const jetBtn = document.getElementById('jetBtn');
-
-function handleJetStart(e) {
-  e.preventDefault();
-  jetting = true;
-  jetStartTime = Date.now();
-  jetBtn.classList.add('active');
-}
-
-function handleJetEnd(e) {
-  e.preventDefault();
-  jetting = false;
-  jetBtn.classList.remove('active');
-}
-
-if ('ontouchstart' in window) {
-  jetBtn.addEventListener('touchstart', handleJetStart, {passive: false});
-  jetBtn.addEventListener('touchend', handleJetEnd, {passive: false});
-  jetBtn.addEventListener('touchcancel', handleJetEnd, {passive: false});
-} else {
-  jetBtn.addEventListener('pointerdown', handleJetStart);
-  jetBtn.addEventListener('pointerup', handleJetEnd);
-  jetBtn.addEventListener('pointerleave', handleJetEnd);
-}
-
-document.addEventListener('keydown', e => {
-  if (e.code === 'Space') { handleJetStart(e); }
-  if (e.code === 'KeyR') { resetGame(); }
-  if (e.code === 'KeyP') { togglePause(); }
-  if (e.code === 'KeyM') { toggleMute(); }
-
-  // Arrow keys for tilt control
-  if (e.code === 'ArrowLeft') { tiltX = Math.max(tiltX - 0.3, -1); }
-  if (e.code === 'ArrowRight') { tiltX = Math.min(tiltX + 0.3, 1); }
-  if (e.code === 'ArrowUp') { tiltZ = Math.max(tiltZ - 0.3, -1); }
-  if (e.code === 'ArrowDown') { tiltZ = Math.min(tiltZ + 0.3, 1); }
-});
-
-document.addEventListener('keyup', e => {
-  if (e.code === 'Space') { handleJetEnd(e); }
-
-  // Reset tilt when arrow keys released
-  if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
-    tiltX *= 0.5;
-  }
-  if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
-    tiltZ *= 0.5;
-  }
-});
-
-// Device orientation for mobile tilt
-if (window.DeviceOrientationEvent) {
-  window.addEventListener('deviceorientation', (e) => {
-    if (paused) return;
-
-    const gamma = e.gamma || 0;
-    const beta = e.beta || 0;
-
-    tiltX = Math.max(-1, Math.min(1, gamma / 45));
-    tiltZ = Math.max(-1, Math.min(1, (beta - 90) / 45));
-  });
-}
-
-document.getElementById('resetBtn').onclick = resetGame;
-document.getElementById('pauseBtn').onclick = togglePause;
-document.getElementById('muteBtn').onclick = toggleMute;
-
-/* ========================== GAME FUNCTIONS ========================== */
-function resetGame() {
-  score = 0;
-  document.getElementById('scoreVal').textContent = score;
-
-  jetParticles.forEach(p => gameContainer.remove(p.mesh));
-  jetParticles = [];
-
-  spawnInitialRings();
-
-  // Reset tilt
-  tiltX = 0;
-  tiltZ = 0;
-  gameContainer.rotation.x = 0;
-  gameContainer.rotation.z = 0;
-
-  paused = false;
-  showPause(false);
-}
-
-function togglePause() {
-  paused = !paused;
-  document.getElementById('pauseText').textContent = paused ? 'Resume' : 'Pause';
-  document.getElementById('pauseIcon').className = 'icon ' + (paused ? 'i-play' : 'i-pause');
-  showPause(paused);
-}
-
-function toggleMute() {
-  muted = !muted;
-  document.getElementById('muteText').textContent = muted ? 'Muted' : 'Sound';
-  document.getElementById('muteIcon').className = 'icon ' + (muted ? 'i-mute' : 'i-sound');
-}
-
-function showPause(show, title = 'Paused') {
-  const overlay = document.getElementById('pauseOverlay');
-  overlay.classList.toggle('show', show);
-  if (title) overlay.querySelector('h2').textContent = title;
-}
-
-function playSound(id, volume = 1) {
-  if (muted) return;
-  try {
-    const audio = document.getElementById(id).cloneNode();
-    audio.volume = volume;
-    audio.play();
-  } catch(e) {}
-}
-
-function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-/* ========================== INIT ========================== */
-function init() {
-  initPhysics();
-  initThree();
-  spawnInitialRings();
-  animate();
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
-
-// Public API
-window.ringToss3D = {
-  reset: resetGame
-};
+    // Start the game
+    init();
   </script>
 </body>
 </html>
