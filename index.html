@@ -251,7 +251,7 @@
   <!-- Controls -->
   <div class="controls">
     <div class="info-row">
-      <span>Hold button to activate water jet</span>
+      <span>Hold button to jet • Arrow keys or tilt device to move</span>
     </div>
     <button class="jet-btn" id="jetBtn">HOLD TO JET</button>
   </div>
@@ -288,7 +288,8 @@ const CONFIG = {
   RING_THICKNESS: 0.06,
   TANK_WIDTH: 4,
   TANK_HEIGHT: 6,
-  TANK_DEPTH: 3,
+  TANK_DEPTH: 1.5,       // Reduced depth - less 3D depth
+  TILT_SENSITIVITY: 0.4, // How much tilt affects nozzle movement
 };
 
 /* ========================== GLOBALS ========================== */
@@ -301,6 +302,8 @@ let paused = false, muted = false, running = true;
 let clock = new THREE.Clock();
 let tankMesh, waterMesh, nozzleMesh;
 let jetParticles = [];
+let tiltX = 0, tiltZ = 0;  // Tilt values for moving nozzle
+let nozzleBaseX = 0, nozzleBaseZ = 0.6;  // Base nozzle position (front of tank)
 
 /* ========================== THREE.JS SETUP ========================== */
 function initThree() {
@@ -465,7 +468,7 @@ function createNozzle() {
     roughness: 0.2,
   });
   nozzleMesh = new THREE.Mesh(nozzleGeo, nozzleMat);
-  nozzleMesh.position.set(0, 0.1, 1.2);
+  nozzleMesh.position.set(nozzleBaseX, 0.1, nozzleBaseZ);
   scene.add(nozzleMesh);
 }
 
@@ -775,6 +778,12 @@ function animate() {
   if (!paused) {
     updatePhysics(dt);
 
+    // Update nozzle position based on tilt
+    const maxTiltX = (CONFIG.TANK_WIDTH / 2) * CONFIG.TILT_SENSITIVITY;
+    const maxTiltZ = (CONFIG.TANK_DEPTH / 2) * CONFIG.TILT_SENSITIVITY;
+    nozzleMesh.position.x = nozzleBaseX + (tiltX * maxTiltX);
+    nozzleMesh.position.z = nozzleBaseZ + (tiltZ * maxTiltZ);
+
     // Spawn jet particles
     if (jetting && Date.now() - lastParticleTime > 50) {
       spawnJetParticles();
@@ -822,11 +831,41 @@ document.addEventListener('keydown', e => {
   if (e.code === 'KeyR') { resetGame(); }
   if (e.code === 'KeyP') { togglePause(); }
   if (e.code === 'KeyM') { toggleMute(); }
+
+  // Arrow keys for tilt control (PC/keyboard)
+  if (e.code === 'ArrowLeft') { tiltX = Math.max(tiltX - 0.3, -1); }
+  if (e.code === 'ArrowRight') { tiltX = Math.min(tiltX + 0.3, 1); }
+  if (e.code === 'ArrowUp') { tiltZ = Math.max(tiltZ - 0.3, -1); }
+  if (e.code === 'ArrowDown') { tiltZ = Math.min(tiltZ + 0.3, 1); }
 });
 
 document.addEventListener('keyup', e => {
   if (e.code === 'Space') { handleJetEnd(e); }
+
+  // Reset tilt when arrow keys released
+  if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+    tiltX *= 0.5; // Smooth return to center
+  }
+  if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+    tiltZ *= 0.5; // Smooth return to center
+  }
 });
+
+// Device orientation for mobile tilt
+if (window.DeviceOrientationEvent) {
+  window.addEventListener('deviceorientation', (e) => {
+    if (paused) return;
+
+    // gamma: left-right tilt (-90 to 90)
+    // beta: front-back tilt (-180 to 180)
+    const gamma = e.gamma || 0;
+    const beta = e.beta || 0;
+
+    // Map device orientation to tilt (-1 to 1)
+    tiltX = Math.max(-1, Math.min(1, gamma / 45));  // -45 to 45 degrees
+    tiltZ = Math.max(-1, Math.min(1, (beta - 90) / 45));  // Center around 90 degrees
+  });
+}
 
 document.getElementById('resetBtn').onclick = resetGame;
 document.getElementById('pauseBtn').onclick = togglePause;
