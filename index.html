@@ -2,391 +2,146 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Water Ring Toss 3D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cannon.js Test</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    overflow: hidden;
-    font-family: system-ui, sans-serif;
-    background: #0a0e1a;
-    color: #fff;
-  }
-  #container { width: 100vw; height: 100vh; }
-  canvas { display: block; }
-
-  .hud {
+  * { margin: 0; padding: 0; }
+  body { overflow: hidden; background: #000; }
+  #log {
     position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 10;
-    font-size: 20px;
-    background: rgba(0,0,0,0.7);
-    padding: 15px;
-    border-radius: 10px;
-  }
-
-  .controls {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-  }
-
-  .jet-btn {
-    width: 200px;
-    height: 80px;
-    font-size: 20px;
-    font-weight: bold;
-    background: #4a90e2;
-    border: none;
-    border-radius: 15px;
+    top: 10px;
+    left: 10px;
     color: white;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    user-select: none;
-  }
-
-  .jet-btn:active {
-    background: #6ba5e7;
-    transform: translateY(2px);
-  }
-
-  .reset-btn {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    z-index: 10;
-    padding: 12px 24px;
-    font-size: 16px;
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.3);
-    border-radius: 8px;
-    color: white;
-    cursor: pointer;
+    font-family: monospace;
+    background: rgba(0,0,0,0.8);
+    padding: 10px;
+    z-index: 100;
+    font-size: 14px;
+    max-width: 500px;
   }
 </style>
 </head>
 <body>
-  <div id="container"></div>
-
-  <div class="hud">
-    Score: <span id="score">0</span>
-  </div>
-
-  <button class="reset-btn" onclick="resetGame()">Reset</button>
-
-  <div class="controls">
-    <button class="jet-btn" id="jetBtn">HOLD TO JET</button>
-  </div>
+  <div id="log">Initializing...</div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
 
   <script>
-    // Configuration
-    const CONFIG = {
-      TANK_WIDTH: 3,
-      TANK_HEIGHT: 4,
-      TANK_DEPTH: 1.5,
-      RING_COUNT: 6,
-      RING_RADIUS: 0.2,
-      RING_THICKNESS: 0.05,
-      POST_HEIGHT: 2.5,
-      POST_RADIUS: 0.06,
-      JET_FORCE: 20,
-    };
+    const log = document.getElementById('log');
+    let logText = '';
 
-    // Globals
-    let scene, camera, renderer;
-    let world;
-    let rings = [];
-    let posts = [];
-    let jetting = false;
-    let score = 0;
+    function addLog(msg) {
+      logText += msg + '<br>';
+      log.innerHTML = logText;
+      console.log(msg);
+    }
 
-    function init() {
+    try {
+      addLog('✓ Starting...');
+
+      // Check if libraries loaded
+      addLog('THREE defined: ' + (typeof THREE !== 'undefined'));
+      addLog('CANNON defined: ' + (typeof CANNON !== 'undefined'));
+
+      if (typeof THREE === 'undefined') throw new Error('Three.js failed to load');
+      if (typeof CANNON === 'undefined') throw new Error('Cannon.js failed to load');
+
       // Three.js setup
-      scene = new THREE.Scene();
+      addLog('✓ Creating scene...');
+      const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x1a1a2e);
 
-      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-      camera.position.set(0, 3, 6);
-      camera.lookAt(0, 2, 0);
+      addLog('✓ Creating camera...');
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 2, 5);
+      camera.lookAt(0, 0, 0);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      addLog('✓ Creating renderer...');
+      const renderer = new THREE.WebGLRenderer();
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.shadowMap.enabled = true;
-      document.getElementById('container').appendChild(renderer.domElement);
+      document.body.appendChild(renderer.domElement);
 
-      // Lights
+      addLog('✓ Adding lights...');
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
       scene.add(ambientLight);
-
       const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
       dirLight.position.set(5, 10, 5);
-      dirLight.castShadow = true;
       scene.add(dirLight);
 
-      // Cannon.js physics world
-      world = new CANNON.World();
+      // Cannon.js setup
+      addLog('✓ Creating Cannon world...');
+      const world = new CANNON.World();
       world.gravity.set(0, -9.82, 0);
+      addLog('✓ Gravity set: ' + world.gravity.y);
 
-      // Create ground
+      // Ground
+      addLog('✓ Creating ground...');
       const groundShape = new CANNON.Plane();
       const groundBody = new CANNON.Body({ mass: 0 });
       groundBody.addShape(groundShape);
       groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
       world.addBody(groundBody);
+      addLog('✓ Ground added to world');
 
-      // Visual floor
-      const floorGeo = new THREE.PlaneGeometry(CONFIG.TANK_WIDTH, CONFIG.TANK_DEPTH);
-      const floorMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 });
-      const floor = new THREE.Mesh(floorGeo, floorMat);
-      floor.rotation.x = -Math.PI / 2;
-      floor.receiveShadow = true;
-      scene.add(floor);
+      // Visual ground
+      const groundGeo = new THREE.PlaneGeometry(10, 10);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+      const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+      groundMesh.rotation.x = -Math.PI / 2;
+      scene.add(groundMesh);
 
-      // Create game objects
-      createTank();
-      createPosts();
-      createRings();
+      // Falling sphere
+      addLog('✓ Creating sphere...');
+      const sphereShape = new CANNON.Sphere(0.5);
+      const sphereBody = new CANNON.Body({ mass: 1 });
+      sphereBody.addShape(sphereShape);
+      sphereBody.position.set(0, 3, 0);
+      world.addBody(sphereBody);
+      addLog('✓ Sphere added at y=' + sphereBody.position.y);
 
-      // Controls
-      const jetBtn = document.getElementById('jetBtn');
+      // Visual sphere
+      const sphereGeo = new THREE.SphereGeometry(0.5, 32, 32);
+      const sphereMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+      const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
+      sphereMesh.position.set(0, 3, 0);
+      scene.add(sphereMesh);
 
-      jetBtn.addEventListener('mousedown', () => jetting = true);
-      jetBtn.addEventListener('mouseup', () => jetting = false);
-      jetBtn.addEventListener('mouseleave', () => jetting = false);
+      addLog('✓ Starting animation...');
 
-      jetBtn.addEventListener('touchstart', (e) => { e.preventDefault(); jetting = true; });
-      jetBtn.addEventListener('touchend', (e) => { e.preventDefault(); jetting = false; });
+      let frameCount = 0;
 
-      // Start animation
+      function animate() {
+        requestAnimationFrame(animate);
+
+        frameCount++;
+
+        // Step physics
+        world.step(1 / 60);
+
+        // Sync visual with physics
+        sphereMesh.position.set(
+          sphereBody.position.x,
+          sphereBody.position.y,
+          sphereBody.position.z
+        );
+
+        // Update log every 60 frames
+        if (frameCount % 60 === 0) {
+          addLog('Frame ' + frameCount + ' | Sphere Y: ' + sphereBody.position.y.toFixed(2));
+        }
+
+        renderer.render(scene, camera);
+      }
+
       animate();
 
-      window.addEventListener('resize', onResize);
+      addLog('<span style="color:#0f0">✓✓✓ ALL WORKING! Watch the red sphere fall!</span>');
+
+    } catch (error) {
+      addLog('<span style="color:#f00">❌ ERROR: ' + error.message + '</span>');
+      console.error('Full error:', error);
     }
-
-    function createTank() {
-      // Glass tank visual
-      const tankGeo = new THREE.BoxGeometry(CONFIG.TANK_WIDTH, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH);
-      const tankMat = new THREE.MeshPhysicalMaterial({
-        color: 0x88ccff,
-        transparent: true,
-        opacity: 0.2,
-        metalness: 0,
-        roughness: 0.1,
-      });
-      const tank = new THREE.Mesh(tankGeo, tankMat);
-      tank.position.y = CONFIG.TANK_HEIGHT / 2;
-      scene.add(tank);
-
-      // Tank edges
-      const edges = new THREE.EdgesGeometry(tankGeo);
-      const edgeMat = new THREE.LineBasicMaterial({ color: 0x4dd4ff });
-      const wireframe = new THREE.LineSegments(edges, edgeMat);
-      tank.add(wireframe);
-
-      // Physics walls
-      const wallThickness = 0.2;
-
-      // Left wall
-      const leftWallShape = new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT / 2, CONFIG.TANK_DEPTH / 2));
-      const leftWall = new CANNON.Body({ mass: 0 });
-      leftWall.addShape(leftWallShape);
-      leftWall.position.set(-CONFIG.TANK_WIDTH / 2, CONFIG.TANK_HEIGHT / 2, 0);
-      world.addBody(leftWall);
-
-      // Right wall
-      const rightWallShape = new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT / 2, CONFIG.TANK_DEPTH / 2));
-      const rightWall = new CANNON.Body({ mass: 0 });
-      rightWall.addShape(rightWallShape);
-      rightWall.position.set(CONFIG.TANK_WIDTH / 2, CONFIG.TANK_HEIGHT / 2, 0);
-      world.addBody(rightWall);
-
-      // Front wall
-      const frontWallShape = new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH / 2, CONFIG.TANK_HEIGHT / 2, wallThickness));
-      const frontWall = new CANNON.Body({ mass: 0 });
-      frontWall.addShape(frontWallShape);
-      frontWall.position.set(0, CONFIG.TANK_HEIGHT / 2, CONFIG.TANK_DEPTH / 2);
-      world.addBody(frontWall);
-
-      // Back wall
-      const backWallShape = new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH / 2, CONFIG.TANK_HEIGHT / 2, wallThickness));
-      const backWall = new CANNON.Body({ mass: 0 });
-      backWall.addShape(backWallShape);
-      backWall.position.set(0, CONFIG.TANK_HEIGHT / 2, -CONFIG.TANK_DEPTH / 2);
-      world.addBody(backWall);
-    }
-
-    function createPosts() {
-      const postGeo = new THREE.CylinderGeometry(CONFIG.POST_RADIUS, CONFIG.POST_RADIUS, CONFIG.POST_HEIGHT, 16);
-      const postMat = new THREE.MeshStandardMaterial({
-        color: 0x8b5cf6,
-        metalness: 0.5,
-        roughness: 0.3,
-      });
-
-      const postPositions = [-0.3, 0.3];
-      postPositions.forEach(x => {
-        // Visual post
-        const postMesh = new THREE.Mesh(postGeo, postMat);
-        postMesh.position.set(x, CONFIG.POST_HEIGHT / 2, 0);
-        postMesh.castShadow = true;
-        scene.add(postMesh);
-
-        // Physics post (static cylinder)
-        const postShape = new CANNON.Cylinder(CONFIG.POST_RADIUS, CONFIG.POST_RADIUS, CONFIG.POST_HEIGHT, 16);
-        const postBody = new CANNON.Body({ mass: 0 });
-        postBody.addShape(postShape);
-        postBody.position.set(x, CONFIG.POST_HEIGHT / 2, 0);
-        world.addBody(postBody);
-
-        posts.push({
-          mesh: postMesh,
-          body: postBody,
-          x: x,
-          topY: CONFIG.POST_HEIGHT
-        });
-      });
-    }
-
-    function createRings() {
-      const colors = [0xff6b6b, 0xffd166, 0x06d6a0, 0x4cc9f0, 0xa78bfa, 0xf472b6];
-
-      for (let i = 0; i < CONFIG.RING_COUNT; i++) {
-        // Visual ring
-        const ringGeo = new THREE.TorusGeometry(CONFIG.RING_RADIUS, CONFIG.RING_THICKNESS, 16, 32);
-        const ringMat = new THREE.MeshStandardMaterial({
-          color: colors[i % colors.length],
-          metalness: 0.3,
-          roughness: 0.4,
-        });
-        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-
-        const startX = (i % 2 - 0.5) * 0.5;
-        const startY = 1 + i * 0.2;
-        const startZ = (Math.floor(i / 2) - 1) * 0.3;
-
-        ringMesh.position.set(startX, startY, startZ);
-        ringMesh.castShadow = true;
-        scene.add(ringMesh);
-
-        // Physics ring (sphere for simplicity - much more stable)
-        const ringShape = new CANNON.Sphere(CONFIG.RING_RADIUS);
-        const ringBody = new CANNON.Body({
-          mass: 0.05,
-          linearDamping: 0.5,
-          angularDamping: 0.5,
-        });
-        ringBody.addShape(ringShape);
-        ringBody.position.set(startX, startY, startZ);
-        world.addBody(ringBody);
-
-        rings.push({
-          mesh: ringMesh,
-          body: ringBody,
-          scored: false
-        });
-      }
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-
-      // Step physics
-      const timeStep = 1 / 60;
-      world.step(timeStep);
-
-      // Apply jet force
-      if (jetting) {
-        rings.forEach(ring => {
-          if (ring.scored) return;
-
-          const dx = ring.body.position.x;
-          const dy = ring.body.position.y;
-          const dz = ring.body.position.z;
-          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-          if (dist < 2) {
-            ring.body.applyForce(new CANNON.Vec3(0, CONFIG.JET_FORCE, 0), ring.body.position);
-          }
-        });
-      }
-
-      // Sync visuals with physics
-      rings.forEach(ring => {
-        ring.mesh.position.set(
-          ring.body.position.x,
-          ring.body.position.y,
-          ring.body.position.z
-        );
-        ring.mesh.quaternion.set(
-          ring.body.quaternion.x,
-          ring.body.quaternion.y,
-          ring.body.quaternion.z,
-          ring.body.quaternion.w
-        );
-
-        // Check scoring
-        if (!ring.scored) {
-          posts.forEach(post => {
-            const dx = ring.body.position.x - post.x;
-            const dz = ring.body.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-
-            if (dist < CONFIG.RING_RADIUS &&
-                ring.body.position.y > post.topY - 0.3 &&
-                ring.body.position.y < post.topY) {
-
-              const speed = Math.sqrt(
-                ring.body.velocity.x ** 2 +
-                ring.body.velocity.y ** 2 +
-                ring.body.velocity.z ** 2
-              );
-
-              if (speed < 1) {
-                ring.scored = true;
-                score++;
-                document.getElementById('score').textContent = score;
-
-                // Lock ring
-                ring.body.velocity.set(0, 0, 0);
-                ring.body.angularVelocity.set(0, 0, 0);
-                ring.body.position.set(post.x, post.topY - 0.2, 0);
-              }
-            }
-          });
-        }
-      });
-
-      renderer.render(scene, camera);
-    }
-
-    function resetGame() {
-      // Remove old rings
-      rings.forEach(ring => {
-        scene.remove(ring.mesh);
-        world.removeBody(ring.body);
-      });
-
-      rings = [];
-      score = 0;
-      document.getElementById('score').textContent = score;
-
-      createRings();
-    }
-
-    function onResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    // Start
-    init();
   </script>
 </body>
 </html>
