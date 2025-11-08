@@ -271,34 +271,37 @@
   <!-- Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 
+  <!-- Cannon-es Physics Engine -->
+  <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
+
   <script>
 /* ========================== CONFIG ========================== */
 const CONFIG = {
   COLORS: [0xff6b6b, 0xffd166, 0x06d6a0, 0x4cc9f0, 0xa78bfa, 0xf472b6],
   RING_COUNT: 12,
-  GRAVITY: -8.0,         // Gravity - balanced for water
-  BUOYANCY: 3.5,         // Light buoyancy - rings slowly settle
-  WATER_DRAG: 0.92,      // Water resistance
-  ANGULAR_DRAG: 0.85,    // Angular velocity damping (rings stop spinning)
-  FLATTEN_FORCE: 8.0,    // Force that makes rings orient flat
-  JET_FORCE: 100,        // Very strong jet force - sends rings flying
-  JET_RADIUS: 0.8,       // Jet radius (smaller tank)
-  POST_HEIGHT: 2.4,      // Smaller posts
-  POST_RADIUS: 0.055,    // Smaller post radius
-  RING_OUTER_R: 0.24,    // Smaller rings
+  GRAVITY: -9.81,        // Real gravity
+  WATER_LINEAR_DRAG: 0.5,   // Linear velocity damping (water resistance)
+  WATER_ANGULAR_DRAG: 0.3,  // Angular velocity damping
+  JET_FORCE: 200,        // Strong jet impulse
+  JET_RADIUS: 0.8,
+  POST_HEIGHT: 2.4,
+  POST_RADIUS: 0.055,
+  RING_OUTER_R: 0.24,
   RING_INNER_R: 0.18,
   RING_THICKNESS: 0.04,
-  TANK_WIDTH: 2.6,       // Smaller tank - 65% of original
+  RING_MASS: 0.1,        // Light plastic rings
+  TANK_WIDTH: 2.6,
   TANK_HEIGHT: 4.0,
   TANK_DEPTH: 1.0,
-  MAX_TILT_ANGLE: Math.PI / 4,  // 45 degrees max tilt
-  NOZZLE_X: -0.8,        // Nozzle on left side (adjusted for smaller tank)
-  NOZZLE_Z: 0.4,         // Nozzle position front (adjusted)
+  MAX_TILT_ANGLE: Math.PI / 4,  // 45 degrees
+  NOZZLE_X: -0.8,
+  NOZZLE_Z: 0.4,
 };
 
 /* ========================== GLOBALS ========================== */
 let scene, camera, renderer, container;
-let gameContainer;  // Container that holds and rotates the entire game
+let world;  // Cannon.js physics world
+let gameContainer;  // Three.js container for tilt
 let rings = [], posts = [];
 let waterLevel = CONFIG.TANK_HEIGHT * 0.75;
 let jetting = false, jetStartTime = 0;
@@ -307,7 +310,69 @@ let paused = false, muted = false, running = true;
 let clock = new THREE.Clock();
 let tankMesh, waterMesh, nozzleMesh;
 let jetParticles = [];
-let tiltX = 0, tiltZ = 0;  // Tilt values (-1 to 1, mapped to ±45°)
+let tiltX = 0, tiltZ = 0;
+
+/* ========================== PHYSICS SETUP ========================== */
+function initPhysics() {
+  world = new CANNON.World({
+    gravity: new CANNON.Vec3(0, CONFIG.GRAVITY, 0)
+  });
+
+  // Broadphase for better performance
+  world.broadphase = new CANNON.NaiveBroadphase();
+
+  // Default contact material
+  const defaultMaterial = new CANNON.Material('default');
+  const contactMaterial = new CANNON.ContactMaterial(defaultMaterial, defaultMaterial, {
+    friction: 0.3,
+    restitution: 0.2,  // Low bounce
+  });
+  world.addContactMaterial(contactMaterial);
+  world.defaultContactMaterial = contactMaterial;
+
+  // Tank floor
+  const floorBody = new CANNON.Body({
+    mass: 0,  // Static
+    shape: new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, 0.1, CONFIG.TANK_DEPTH/2)),
+    position: new CANNON.Vec3(0, 0, 0),
+  });
+  world.addBody(floorBody);
+
+  // Tank walls
+  const wallThickness = 0.1;
+
+  // Left wall
+  const leftWall = new CANNON.Body({
+    mass: 0,
+    shape: new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH/2)),
+    position: new CANNON.Vec3(-CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT/2, 0),
+  });
+  world.addBody(leftWall);
+
+  // Right wall
+  const rightWall = new CANNON.Body({
+    mass: 0,
+    shape: new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH/2)),
+    position: new CANNON.Vec3(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT/2, 0),
+  });
+  world.addBody(rightWall);
+
+  // Front wall
+  const frontWall = new CANNON.Body({
+    mass: 0,
+    shape: new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT, wallThickness)),
+    position: new CANNON.Vec3(0, CONFIG.TANK_HEIGHT/2, CONFIG.TANK_DEPTH/2),
+  });
+  world.addBody(frontWall);
+
+  // Back wall
+  const backWall = new CANNON.Body({
+    mass: 0,
+    shape: new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH/2, CONFIG.TANK_HEIGHT, wallThickness)),
+    position: new CANNON.Vec3(0, CONFIG.TANK_HEIGHT/2, -CONFIG.TANK_DEPTH/2),
+  });
+  world.addBody(backWall);
+}
 
 /* ========================== THREE.JS SETUP ========================== */
 function initThree() {
@@ -355,17 +420,13 @@ function initThree() {
   rimLight.position.set(0, 5, -3);
   scene.add(rimLight);
 
-  // Create game container (this will rotate for tilt)
+  // Create game container (visual tilt, physics world stays upright)
   gameContainer = new THREE.Group();
   scene.add(gameContainer);
 
-  // Create tank
+  // Create visuals
   createTank();
-
-  // Create posts
   createPosts();
-
-  // Create nozzle
   createNozzle();
 
   // Window resize
@@ -451,8 +512,18 @@ function createPosts() {
     post.receiveShadow = true;
     gameContainer.add(post);
 
+    // Post physics body (static cylinder)
+    const postBody = new CANNON.Body({
+      mass: 0,
+      shape: new CANNON.Cylinder(CONFIG.POST_RADIUS * 1.3, CONFIG.POST_RADIUS, CONFIG.POST_HEIGHT, 16),
+      position: new CANNON.Vec3(x, yPos, 0),
+    });
+    // Rotate to match Three.js cylinder (Cannon cylinders are Y-axis by default, same as Three.js)
+    world.addBody(postBody);
+
     posts.push({
       mesh: post,
+      body: postBody,
       x: x,
       z: 0,
       topY: CONFIG.POST_HEIGHT,
@@ -482,6 +553,7 @@ function createNozzle() {
 
 /* ========================== RING CREATION ========================== */
 function createRing(x, y, z, colorHex) {
+  // Three.js visual (torus shape)
   const shape = new THREE.Shape();
   shape.absarc(0, 0, CONFIG.RING_OUTER_R, 0, Math.PI * 2, false);
 
@@ -513,24 +585,38 @@ function createRing(x, y, z, colorHex) {
   ring.receiveShadow = true;
   gameContainer.add(ring);
 
+  // Cannon.js physics body (cylinder approximation - much more stable than torus)
+  const ringRadius = (CONFIG.RING_OUTER_R + CONFIG.RING_INNER_R) / 2;
+  const ringBody = new CANNON.Body({
+    mass: CONFIG.RING_MASS,
+    shape: new CANNON.Cylinder(ringRadius, ringRadius, CONFIG.RING_THICKNESS, 16),
+    position: new CANNON.Vec3(x, y, z),
+    linearDamping: CONFIG.WATER_LINEAR_DRAG,
+    angularDamping: CONFIG.WATER_ANGULAR_DRAG,
+  });
+
+  // Rotate body to match Three.js ring orientation (flat)
+  ringBody.quaternion.setFromEuler(Math.PI / 2, 0, 0);
+
+  world.addBody(ringBody);
+
   return {
     mesh: ring,
-    velocity: new THREE.Vector3(0, 0, 0),
-    angularVel: new THREE.Vector3(
-      (Math.random() - 0.5) * 1,
-      (Math.random() - 0.5) * 1,
-      (Math.random() - 0.5) * 1
-    ),
+    body: ringBody,
     scored: false,
     hooked: false,
     hookedPost: null,
-    mass: 0.35,
+    color: colorHex,
   };
 }
 
 /* ========================== SPAWN RINGS ========================== */
 function spawnInitialRings() {
-  rings.forEach(r => gameContainer.remove(r.mesh));
+  // Remove old rings
+  rings.forEach(r => {
+    gameContainer.remove(r.mesh);
+    world.removeBody(r.body);
+  });
   rings = [];
 
   const rows = 3;
@@ -550,126 +636,100 @@ function spawnInitialRings() {
   }
 }
 
-/* ========================== PHYSICS ========================== */
+/* ========================== PHYSICS UPDATE ========================== */
 function updatePhysics(dt) {
-  // Transform world gravity to gameContainer's local space
-  const worldGravity = new THREE.Vector3(0, CONFIG.GRAVITY + CONFIG.BUOYANCY, 0);
-  const localGravity = worldGravity.clone().applyQuaternion(gameContainer.quaternion.clone().invert());
+  if (dt > 0.1) dt = 0.1; // Cap delta time
 
-  rings.forEach(ring => {
-    const pos = ring.mesh.position;
+  // Update physics world gravity based on tilt
+  const tiltRotation = new THREE.Quaternion();
+  tiltRotation.setFromEuler(new THREE.Euler(
+    tiltZ * CONFIG.MAX_TILT_ANGLE,
+    0,
+    -tiltX * CONFIG.MAX_TILT_ANGLE
+  ));
 
-    if (ring.hooked) {
-      // Anchored to post
-      const post = ring.hookedPost;
-      const targetY = post.topY - 0.15;
-      pos.y += (targetY - pos.y) * 0.12;
-      pos.x += (post.x - pos.x) * 0.12;
-      pos.z += (post.z - pos.z) * 0.12;
-      ring.velocity.multiplyScalar(0.85);
-      ring.angularVel.multiplyScalar(0.85);
-      return;
-    }
+  const baseGravity = new THREE.Vector3(0, CONFIG.GRAVITY, 0);
+  baseGravity.applyQuaternion(tiltRotation);
 
-    // Gravity in local space (accounts for tank tilt)
-    let accelX = localGravity.x / ring.mass;
-    let accelY = localGravity.y / ring.mass;
-    let accelZ = localGravity.z / ring.mass;
+  world.gravity.set(baseGravity.x, baseGravity.y, baseGravity.z);
 
-    // Jet force - ONLY when jetting and ONLY near the nozzle
-    if (jetting) {
-      const nozzlePos = nozzleMesh.position;
-      const dx = pos.x - nozzlePos.x;
-      const dy = pos.y - nozzlePos.y;
-      const dz = pos.z - nozzlePos.z;
+  // Apply jet forces
+  if (jetting) {
+    const nozzlePos = new CANNON.Vec3(CONFIG.NOZZLE_X, 0.1, CONFIG.NOZZLE_Z);
+    const holdTime = (Date.now() - jetStartTime) / 1000;
+    const powerMult = Math.min(1 + holdTime * 0.8, 2.5);
+
+    rings.forEach(ring => {
+      if (ring.hooked) return;
+
+      const ringPos = ring.body.position;
+      const dx = ringPos.x - nozzlePos.x;
+      const dy = ringPos.y - nozzlePos.y;
+      const dz = ringPos.z - nozzlePos.z;
       const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
 
-      // Only apply jet force within a small radius
       if (dist < CONFIG.JET_RADIUS) {
         const jetPower = 1 - (dist / CONFIG.JET_RADIUS);
-        const holdTime = (Date.now() - jetStartTime) / 1000;
-        const powerMult = Math.min(1 + holdTime * 0.8, 2.5);
         const force = CONFIG.JET_FORCE * jetPower * powerMult;
 
-        // Upward jet force - very strong
-        accelY += force / ring.mass;
+        // Apply upward force
+        const impulse = new CANNON.Vec3(
+          dx * force * 0.3 * dt,
+          force * dt,
+          dz * force * 0.3 * dt
+        );
+        ring.body.applyImpulse(impulse, ring.body.position);
 
-        // Spread rings outward dramatically from jet center
-        if (dist > 0.01) {
-          accelX += (dx / dist) * force * 0.6 / ring.mass;
-          accelZ += (dz / dist) * force * 0.6 / ring.mass;
-        }
-
-        // Strong turbulence - chaotic water jet
-        accelX += (Math.random() - 0.5) * 8;
-        accelZ += (Math.random() - 0.5) * 8;
-        ring.angularVel.x += (Math.random() - 0.5) * 10 * dt;
-        ring.angularVel.z += (Math.random() - 0.5) * 10 * dt;
+        // Turbulence
+        const turbulence = new CANNON.Vec3(
+          (Math.random() - 0.5) * 4 * dt,
+          0,
+          (Math.random() - 0.5) * 4 * dt
+        );
+        ring.body.applyImpulse(turbulence, ring.body.position);
       }
+    });
+  }
+
+  // Step physics simulation
+  world.step(1/60, dt, 3);
+
+  // Sync Three.js meshes with Cannon.js bodies
+  rings.forEach(ring => {
+    if (ring.hooked) {
+      // Smooth movement to hooked position
+      const post = ring.hookedPost;
+      const targetY = post.topY - 0.15;
+
+      ring.body.position.x += (post.x - ring.body.position.x) * 0.1;
+      ring.body.position.y += (targetY - ring.body.position.y) * 0.1;
+      ring.body.position.z += (post.z - ring.body.position.z) * 0.1;
+
+      ring.body.velocity.set(0, 0, 0);
+      ring.body.angularVelocity.set(0, 0, 0);
     }
 
-    // Apply acceleration
-    ring.velocity.x += accelX * dt;
-    ring.velocity.y += accelY * dt;
-    ring.velocity.z += accelZ * dt;
+    // Sync visual mesh with physics body
+    ring.mesh.position.copy(ring.body.position);
+    ring.mesh.quaternion.copy(ring.body.quaternion);
+  });
 
-    // Flatten force - rings naturally orient horizontally like real discs
-    // Get ring's current "up" normal (in local space, ring starts with normal pointing up in Y)
-    const ringNormal = new THREE.Vector3(0, 1, 0);
-    ringNormal.applyEuler(new THREE.Euler(ring.mesh.rotation.x, ring.mesh.rotation.y, ring.mesh.rotation.z));
+  // Check for scoring
+  rings.forEach(ring => {
+    if (ring.scored || ring.hooked) return;
 
-    // Target is straight up (Y-axis in tank's local space)
-    const targetUp = new THREE.Vector3(0, 1, 0);
-
-    // Calculate torque axis (cross product)
-    const torqueAxis = new THREE.Vector3().crossVectors(ringNormal, targetUp);
-    const angle = ringNormal.angleTo(targetUp);
-
-    // Apply corrective angular velocity (stronger when more tilted)
-    if (angle > 0.01) {
-      torqueAxis.normalize();
-      ring.angularVel.x += torqueAxis.x * angle * CONFIG.FLATTEN_FORCE * dt;
-      ring.angularVel.y += torqueAxis.y * angle * CONFIG.FLATTEN_FORCE * dt;
-      ring.angularVel.z += torqueAxis.z * angle * CONFIG.FLATTEN_FORCE * dt;
-    }
-
-    // Water drag
-    ring.velocity.multiplyScalar(Math.pow(CONFIG.WATER_DRAG, dt));
-    ring.angularVel.multiplyScalar(Math.pow(CONFIG.ANGULAR_DRAG, dt));
-
-    // Update position
-    pos.x += ring.velocity.x * dt;
-    pos.y += ring.velocity.y * dt;
-    pos.z += ring.velocity.z * dt;
-
-    // Update rotation
-    ring.mesh.rotation.x += ring.angularVel.x * dt;
-    ring.mesh.rotation.y += ring.angularVel.y * dt;
-    ring.mesh.rotation.z += ring.angularVel.z * dt;
-
-    // Tank boundaries
-    const wallRestitution = 0.3;
-    const maxX = CONFIG.TANK_WIDTH / 2 - 0.4;
-    const maxZ = CONFIG.TANK_DEPTH / 2 - 0.4;
-    const minY = 0.2;
-    const maxY = CONFIG.TANK_HEIGHT - 0.4;
-
-    if (pos.x < -maxX) { pos.x = -maxX; ring.velocity.x = Math.abs(ring.velocity.x) * wallRestitution; }
-    if (pos.x > maxX) { pos.x = maxX; ring.velocity.x = -Math.abs(ring.velocity.x) * wallRestitution; }
-    if (pos.z < -maxZ) { pos.z = -maxZ; ring.velocity.z = Math.abs(ring.velocity.z) * wallRestitution; }
-    if (pos.z > maxZ) { pos.z = maxZ; ring.velocity.z = -Math.abs(ring.velocity.z) * wallRestitution; }
-    if (pos.y < minY) { pos.y = minY; ring.velocity.y = Math.abs(ring.velocity.y) * wallRestitution; }
-    if (pos.y > maxY) { pos.y = maxY; ring.velocity.y = -Math.abs(ring.velocity.y) * wallRestitution; }
-
-    // Post collision & scoring
     posts.forEach(post => {
-      const dx = pos.x - post.x;
-      const dz = pos.z - post.z;
+      const dx = ring.body.position.x - post.x;
+      const dz = ring.body.position.z - post.z;
       const dist2D = Math.sqrt(dx*dx + dz*dz);
 
-      // Check if ring is around post
-      if (!ring.scored && dist2D < CONFIG.RING_INNER_R && pos.y > post.topY - 0.5 && pos.y < post.topY) {
-        if (Math.abs(ring.velocity.y) < 1.5) {
+      // Check if ring is around post and near top
+      if (dist2D < CONFIG.RING_INNER_R &&
+          ring.body.position.y > post.topY - 0.5 &&
+          ring.body.position.y < post.topY) {
+
+        const speed = ring.body.velocity.length();
+        if (speed < 2) {  // Slow enough to hook
           ring.scored = true;
           ring.hooked = true;
           ring.hookedPost = post;
@@ -682,59 +742,8 @@ function updatePhysics(dt) {
           post.mesh.material.emissiveIntensity = 0.8;
         }
       }
-
-      // Push away from post body
-      if (dist2D < CONFIG.POST_RADIUS * 2) {
-        const pushDist = CONFIG.POST_RADIUS * 2 - dist2D;
-        const nx = dx / dist2D;
-        const nz = dz / dist2D;
-        pos.x += nx * pushDist * 0.5;
-        pos.z += nz * pushDist * 0.5;
-        ring.velocity.x += nx * 2;
-        ring.velocity.z += nz * 2;
-      }
     });
   });
-
-  // Ring-ring collisions
-  for (let i = 0; i < rings.length; i++) {
-    for (let j = i + 1; j < rings.length; j++) {
-      const a = rings[i], b = rings[j];
-      if (a.hooked && b.hooked) continue;
-
-      const dx = a.mesh.position.x - b.mesh.position.x;
-      const dy = a.mesh.position.y - b.mesh.position.y;
-      const dz = a.mesh.position.z - b.mesh.position.z;
-      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-      const minDist = CONFIG.RING_OUTER_R * 1.8;
-
-      if (dist > 0 && dist < minDist) {
-        const overlap = minDist - dist;
-        const nx = dx / dist;
-        const ny = dy / dist;
-        const nz = dz / dist;
-
-        a.mesh.position.x += nx * overlap * 0.5;
-        a.mesh.position.y += ny * overlap * 0.5;
-        a.mesh.position.z += nz * overlap * 0.5;
-        b.mesh.position.x -= nx * overlap * 0.5;
-        b.mesh.position.y -= ny * overlap * 0.5;
-        b.mesh.position.z -= nz * overlap * 0.5;
-
-        const relVel = a.velocity.clone().sub(b.velocity);
-        const velAlongNormal = relVel.dot(new THREE.Vector3(nx, ny, nz));
-        if (velAlongNormal < 0) {
-          const impulse = -1.2 * velAlongNormal;
-          a.velocity.x += nx * impulse * 0.5;
-          a.velocity.y += ny * impulse * 0.5;
-          a.velocity.z += nz * impulse * 0.5;
-          b.velocity.x -= nx * impulse * 0.5;
-          b.velocity.y -= ny * impulse * 0.5;
-          b.velocity.z -= nz * impulse * 0.5;
-        }
-      }
-    }
-  }
 
   // Update post glow
   posts.forEach(post => {
@@ -810,11 +819,10 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.033);
 
   if (!paused) {
-    // Rotate game container based on tilt (max ±45°)
-    const targetRotationZ = -tiltX * CONFIG.MAX_TILT_ANGLE;  // Roll (left-right)
-    const targetRotationX = tiltZ * CONFIG.MAX_TILT_ANGLE;   // Pitch (front-back)
+    // Rotate visual container based on tilt (physics gravity handles actual tilt)
+    const targetRotationZ = -tiltX * CONFIG.MAX_TILT_ANGLE;
+    const targetRotationX = tiltZ * CONFIG.MAX_TILT_ANGLE;
 
-    // Smooth rotation interpolation
     gameContainer.rotation.z += (targetRotationZ - gameContainer.rotation.z) * 0.1;
     gameContainer.rotation.x += (targetRotationX - gameContainer.rotation.x) * 0.1;
 
@@ -868,7 +876,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'KeyP') { togglePause(); }
   if (e.code === 'KeyM') { toggleMute(); }
 
-  // Arrow keys for tilt control (PC/keyboard)
+  // Arrow keys for tilt control
   if (e.code === 'ArrowLeft') { tiltX = Math.max(tiltX - 0.3, -1); }
   if (e.code === 'ArrowRight') { tiltX = Math.min(tiltX + 0.3, 1); }
   if (e.code === 'ArrowUp') { tiltZ = Math.max(tiltZ - 0.3, -1); }
@@ -880,10 +888,10 @@ document.addEventListener('keyup', e => {
 
   // Reset tilt when arrow keys released
   if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
-    tiltX *= 0.5; // Smooth return to center
+    tiltX *= 0.5;
   }
   if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
-    tiltZ *= 0.5; // Smooth return to center
+    tiltZ *= 0.5;
   }
 });
 
@@ -892,14 +900,11 @@ if (window.DeviceOrientationEvent) {
   window.addEventListener('deviceorientation', (e) => {
     if (paused) return;
 
-    // gamma: left-right tilt (-90 to 90)
-    // beta: front-back tilt (-180 to 180)
     const gamma = e.gamma || 0;
     const beta = e.beta || 0;
 
-    // Map device orientation to tilt (-1 to 1)
-    tiltX = Math.max(-1, Math.min(1, gamma / 45));  // -45 to 45 degrees
-    tiltZ = Math.max(-1, Math.min(1, (beta - 90) / 45));  // Center around 90 degrees
+    tiltX = Math.max(-1, Math.min(1, gamma / 45));
+    tiltZ = Math.max(-1, Math.min(1, (beta - 90) / 45));
   });
 }
 
@@ -963,6 +968,7 @@ function onResize() {
 
 /* ========================== INIT ========================== */
 function init() {
+  initPhysics();
   initThree();
   spawnInitialRings();
   animate();
