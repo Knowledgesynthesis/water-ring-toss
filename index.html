@@ -3,388 +3,119 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Water Ring Toss 3D</title>
+<title>Water Ring Toss 3D - Debug</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    overflow: hidden;
-    font-family: system-ui, sans-serif;
-    background: #0a0e1a;
-    color: #fff;
-  }
-  #container { width: 100vw; height: 100vh; }
-  canvas { display: block; }
-
-  .hud {
+  * { margin: 0; padding: 0; }
+  body { overflow: hidden; background: #000; }
+  #info {
     position: absolute;
-    top: 20px;
-    left: 20px;
-    z-index: 10;
-    font-size: 20px;
-    background: rgba(0,0,0,0.5);
-    padding: 15px;
-    border-radius: 10px;
-  }
-
-  .controls {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-  }
-
-  .jet-btn {
-    width: 200px;
-    height: 80px;
-    font-size: 20px;
-    font-weight: bold;
-    background: #4a90e2;
-    border: none;
-    border-radius: 15px;
+    top: 10px;
+    left: 10px;
     color: white;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-  }
-
-  .jet-btn:active {
-    background: #6ba5e7;
-    transform: translateY(2px);
-  }
-
-  .reset-btn {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    z-index: 10;
-    padding: 12px 24px;
-    font-size: 16px;
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.3);
-    border-radius: 8px;
-    color: white;
-    cursor: pointer;
+    font-family: monospace;
+    background: rgba(0,0,0,0.7);
+    padding: 10px;
+    z-index: 100;
   }
 </style>
 </head>
 <body>
-  <div id="container"></div>
-
-  <div class="hud">
-    Score: <span id="score">0</span>
-  </div>
-
-  <button class="reset-btn" onclick="resetGame()">Reset</button>
-
-  <div class="controls">
-    <button class="jet-btn" id="jetBtn">HOLD TO JET</button>
-  </div>
-
+  <div id="info">Loading...</div>
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
-
   <script>
-    // Configuration
-    const CONFIG = {
-      TANK_WIDTH: 3,
-      TANK_HEIGHT: 4,
-      TANK_DEPTH: 1.5,
-      RING_COUNT: 6,
-      RING_RADIUS: 0.2,
-      RING_THICKNESS: 0.05,
-      POST_HEIGHT: 2.5,
-      POST_RADIUS: 0.06,
-      JET_FORCE: 15,
-    };
+    const info = document.getElementById('info');
 
-    // Three.js scene
-    let scene, camera, renderer;
-    let rings = [];
-    let posts = [];
-    let jetting = false;
-    let score = 0;
+    try {
+      info.innerHTML = 'Three.js loaded: ' + (typeof THREE !== 'undefined') + '<br>';
 
-    // Cannon.js physics world
-    let world;
-    let groundBody;
+      if (typeof THREE === 'undefined') {
+        throw new Error('THREE is not defined - CDN failed to load');
+      }
 
-    function init() {
-      // Create Three.js scene
-      scene = new THREE.Scene();
+      // Scene
+      const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x1a1a2e);
-      scene.fog = new THREE.Fog(0x1a1a2e, 5, 15);
+      info.innerHTML += 'Scene created<br>';
 
       // Camera
-      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-      camera.position.set(0, 3, 6);
-      camera.lookAt(0, 2, 0);
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.z = 5;
+      info.innerHTML += 'Camera created<br>';
 
       // Renderer
-      renderer = new THREE.WebGLRenderer({ antialias: true });
+      const renderer = new THREE.WebGLRenderer();
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.shadowMap.enabled = true;
-      document.getElementById('container').appendChild(renderer.domElement);
+      document.body.appendChild(renderer.domElement);
+      info.innerHTML += 'Renderer created<br>';
 
-      // Lights
+      // Add a simple cube
+      const geometry = new THREE.BoxGeometry(2, 2, 2);
+      const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
+      const cube = new THREE.Mesh(geometry, material);
+      scene.add(cube);
+      info.innerHTML += 'Cube added<br>';
+
+      // Add lights and more objects
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
       scene.add(ambientLight);
 
       const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
       dirLight.position.set(5, 10, 5);
-      dirLight.castShadow = true;
-      dirLight.shadow.camera.left = -5;
-      dirLight.shadow.camera.right = 5;
-      dirLight.shadow.camera.top = 5;
-      dirLight.shadow.camera.bottom = -5;
       scene.add(dirLight);
 
-      // Initialize physics
-      initPhysics();
+      // Add colored rings
+      const ringColors = [0xff6b6b, 0xffd166, 0x06d6a0, 0x4cc9f0, 0xa78bfa, 0xf472b6];
+      const rings = [];
 
-      // Create game objects
-      createTank();
-      createPosts();
-      createRings();
+      for (let i = 0; i < 6; i++) {
+        const ringGeo = new THREE.TorusGeometry(0.5, 0.1, 16, 32);
+        const ringMat = new THREE.MeshStandardMaterial({ color: ringColors[i] });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.x = (i % 3 - 1) * 2;
+        ring.position.y = Math.floor(i / 3) * 2 - 1;
+        scene.add(ring);
+        rings.push(ring);
+      }
 
-      // Controls
-      const jetBtn = document.getElementById('jetBtn');
-      jetBtn.addEventListener('pointerdown', () => jetting = true);
-      jetBtn.addEventListener('pointerup', () => jetting = false);
-      jetBtn.addEventListener('pointerleave', () => jetting = false);
+      info.innerHTML += 'Rings added<br>';
+      info.innerHTML += 'Starting animation...<br>';
 
-      // Start animation
+      let frameCount = 0;
+
+      // Animation loop
+      function animate() {
+        requestAnimationFrame(animate);
+
+        frameCount++;
+        if (frameCount % 60 === 0) {
+          info.innerHTML = 'Rendering... Frame: ' + frameCount + '<br>Camera: ' + camera.position.z;
+        }
+
+        cube.rotation.x += 0.01;
+        cube.rotation.y += 0.01;
+
+        rings.forEach((ring, i) => {
+          ring.rotation.y += 0.02 * (i + 1);
+        });
+
+        renderer.render(scene, camera);
+      }
+
       animate();
 
       // Window resize
-      window.addEventListener('resize', onResize);
-    }
-
-    function initPhysics() {
-      world = new CANNON.World();
-      world.gravity.set(0, -9.82, 0);
-
-      // Ground
-      const groundShape = new CANNON.Plane();
-      groundBody = new CANNON.Body({ mass: 0 });
-      groundBody.addShape(groundShape);
-      groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-      world.addBody(groundBody);
-
-      // Tank walls
-      const wallThickness = 0.2;
-
-      // Left wall
-      const leftWall = new CANNON.Body({ mass: 0 });
-      leftWall.addShape(new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH)));
-      leftWall.position.set(-CONFIG.TANK_WIDTH / 2, CONFIG.TANK_HEIGHT / 2, 0);
-      world.addBody(leftWall);
-
-      // Right wall
-      const rightWall = new CANNON.Body({ mass: 0 });
-      rightWall.addShape(new CANNON.Box(new CANNON.Vec3(wallThickness, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH)));
-      rightWall.position.set(CONFIG.TANK_WIDTH / 2, CONFIG.TANK_HEIGHT / 2, 0);
-      world.addBody(rightWall);
-
-      // Front wall
-      const frontWall = new CANNON.Body({ mass: 0 });
-      frontWall.addShape(new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH, CONFIG.TANK_HEIGHT, wallThickness)));
-      frontWall.position.set(0, CONFIG.TANK_HEIGHT / 2, CONFIG.TANK_DEPTH / 2);
-      world.addBody(frontWall);
-
-      // Back wall
-      const backWall = new CANNON.Body({ mass: 0 });
-      backWall.addShape(new CANNON.Box(new CANNON.Vec3(CONFIG.TANK_WIDTH, CONFIG.TANK_HEIGHT, wallThickness)));
-      backWall.position.set(0, CONFIG.TANK_HEIGHT / 2, -CONFIG.TANK_DEPTH / 2);
-      world.addBody(backWall);
-    }
-
-    function createTank() {
-      // Glass tank
-      const tankGeo = new THREE.BoxGeometry(CONFIG.TANK_WIDTH, CONFIG.TANK_HEIGHT, CONFIG.TANK_DEPTH);
-      const tankMat = new THREE.MeshPhysicalMaterial({
-        color: 0x88ccff,
-        transparent: true,
-        opacity: 0.2,
-        metalness: 0,
-        roughness: 0.1,
-      });
-      const tank = new THREE.Mesh(tankGeo, tankMat);
-      tank.position.y = CONFIG.TANK_HEIGHT / 2;
-      scene.add(tank);
-
-      // Edges
-      const edges = new THREE.EdgesGeometry(tankGeo);
-      const edgeMat = new THREE.LineBasicMaterial({ color: 0x4dd4ff });
-      const wireframe = new THREE.LineSegments(edges, edgeMat);
-      tank.add(wireframe);
-
-      // Floor
-      const floorGeo = new THREE.PlaneGeometry(CONFIG.TANK_WIDTH, CONFIG.TANK_DEPTH);
-      const floorMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 });
-      const floor = new THREE.Mesh(floorGeo, floorMat);
-      floor.rotation.x = -Math.PI / 2;
-      floor.receiveShadow = true;
-      scene.add(floor);
-    }
-
-    function createPosts() {
-      const postGeo = new THREE.CylinderGeometry(CONFIG.POST_RADIUS, CONFIG.POST_RADIUS, CONFIG.POST_HEIGHT, 16);
-      const postMat = new THREE.MeshStandardMaterial({
-        color: 0x8b5cf6,
-        metalness: 0.5,
-        roughness: 0.3,
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
       });
 
-      const positions = [-0.3, 0.3];
-      positions.forEach(x => {
-        const post = new THREE.Mesh(postGeo, postMat);
-        post.position.set(x, CONFIG.POST_HEIGHT / 2, 0);
-        post.castShadow = true;
-        scene.add(post);
+      info.innerHTML += '<span style="color:#0f0">✓ All systems working!</span>';
 
-        // Physics body
-        const postBody = new CANNON.Body({ mass: 0 });
-        postBody.addShape(new CANNON.Cylinder(CONFIG.POST_RADIUS, CONFIG.POST_RADIUS, CONFIG.POST_HEIGHT, 16));
-        postBody.position.set(x, CONFIG.POST_HEIGHT / 2, 0);
-        world.addBody(postBody);
-
-        posts.push({
-          mesh: post,
-          body: postBody,
-          x: x,
-          topY: CONFIG.POST_HEIGHT
-        });
-      });
+    } catch (error) {
+      info.innerHTML += '<br><span style="color:#f00">ERROR: ' + error.message + '</span>';
+      console.error(error);
     }
-
-    function createRings() {
-      rings = [];
-      const colors = [0xff6b6b, 0xffd166, 0x06d6a0, 0x4cc9f0, 0xa78bfa, 0xf472b6];
-
-      for (let i = 0; i < CONFIG.RING_COUNT; i++) {
-        // Visual ring (torus)
-        const ringGeo = new THREE.TorusGeometry(CONFIG.RING_RADIUS, CONFIG.RING_THICKNESS, 16, 32);
-        const ringMat = new THREE.MeshStandardMaterial({
-          color: colors[i % colors.length],
-          metalness: 0.3,
-          roughness: 0.4,
-        });
-        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-        ringMesh.position.set(
-          (i % 2 - 0.5) * 0.5,
-          1 + i * 0.2,
-          (Math.floor(i / 2) - 1) * 0.3
-        );
-        ringMesh.castShadow = true;
-        scene.add(ringMesh);
-
-        // Physics body (cylinder shape lying flat)
-        const ringBody = new CANNON.Body({
-          mass: 0.05,
-          linearDamping: 0.5,
-          angularDamping: 0.5,
-        });
-
-        // Create cylinder and rotate it to be horizontal
-        const cylinderShape = new CANNON.Cylinder(CONFIG.RING_RADIUS, CONFIG.RING_RADIUS, CONFIG.RING_THICKNESS, 16);
-        const quat = new CANNON.Quaternion();
-        quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
-        ringBody.addShape(cylinderShape, new CANNON.Vec3(0, 0, 0), quat);
-
-        ringBody.position.set(ringMesh.position.x, ringMesh.position.y, ringMesh.position.z);
-        world.addBody(ringBody);
-
-        rings.push({
-          mesh: ringMesh,
-          body: ringBody,
-          scored: false
-        });
-      }
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-
-      // Step physics
-      world.step(1 / 60);
-
-      // Apply jet force
-      if (jetting) {
-        rings.forEach(ring => {
-          if (ring.scored) return;
-
-          const dx = ring.body.position.x;
-          const dy = ring.body.position.y;
-          const dz = ring.body.position.z;
-          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-          if (dist < 1.5) {
-            ring.body.applyForce(new CANNON.Vec3(0, CONFIG.JET_FORCE, 0), ring.body.position);
-          }
-        });
-      }
-
-      // Sync visual with physics
-      rings.forEach(ring => {
-        ring.mesh.position.set(
-          ring.body.position.x,
-          ring.body.position.y,
-          ring.body.position.z
-        );
-        ring.mesh.quaternion.set(
-          ring.body.quaternion.x,
-          ring.body.quaternion.y,
-          ring.body.quaternion.z,
-          ring.body.quaternion.w
-        );
-
-        // Check scoring
-        if (!ring.scored) {
-          posts.forEach(post => {
-            const dx = ring.body.position.x - post.x;
-            const dz = ring.body.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-
-            if (dist < CONFIG.RING_RADIUS && ring.body.position.y > post.topY - 0.3 && ring.body.position.y < post.topY) {
-              if (ring.body.velocity.length() < 1) {
-                ring.scored = true;
-                score++;
-                document.getElementById('score').textContent = score;
-
-                // Lock ring to post
-                ring.body.velocity.set(0, 0, 0);
-                ring.body.angularVelocity.set(0, 0, 0);
-                ring.body.position.set(post.x, post.topY - 0.2, 0);
-              }
-            }
-          });
-        }
-      });
-
-      renderer.render(scene, camera);
-    }
-
-    function resetGame() {
-      // Remove old rings
-      rings.forEach(ring => {
-        scene.remove(ring.mesh);
-        world.removeBody(ring.body);
-      });
-
-      score = 0;
-      document.getElementById('score').textContent = score;
-
-      createRings();
-    }
-
-    function onResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    // Start the game
-    init();
   </script>
 </body>
 </html>
