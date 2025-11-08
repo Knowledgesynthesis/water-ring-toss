@@ -96,18 +96,22 @@
       POST_RADIUS: 0.06,
       GRAVITY: -9.8,
       DRAG: 0.98,
-      JET_FORCE: 0.8,
+      JET_FORCE: 5.0,  // Powerful jet to send rings flying
       JET_RADIUS: 0.8,
-      NOZZLE_X: -0.8,  // Left side
+      NOZZLE_X: -0.8,
       NOZZLE_Z: 0,
+      MAX_TILT: 0.3,  // Max tilt angle in radians (~17 degrees)
     };
 
     let scene, camera, renderer;
+    let gameContainer;  // For tilting the entire game
     let rings = [];
     let posts = [];
     let nozzleMesh;
     let jetting = false;
     let score = 0;
+    let tiltX = 0;  // Left/right tilt
+    let tiltZ = 0;  // Front/back tilt
 
     function init() {
       // Scene
@@ -134,10 +138,32 @@
       dirLight.castShadow = true;
       scene.add(dirLight);
 
+      // Game container for tilt
+      gameContainer = new THREE.Group();
+      scene.add(gameContainer);
+
       createTank();
       createPosts();
       createNozzle();
       createRings();
+
+      // Arrow key controls for tilt
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'ArrowLeft') tiltX = Math.max(tiltX - 0.05, -1);
+        if (e.code === 'ArrowRight') tiltX = Math.min(tiltX + 0.05, 1);
+        if (e.code === 'ArrowUp') tiltZ = Math.max(tiltZ - 0.05, -1);
+        if (e.code === 'ArrowDown') tiltZ = Math.min(tiltZ + 0.05, 1);
+      });
+
+      // Device orientation for mobile
+      if (window.DeviceOrientationEvent) {
+        window.addEventListener('deviceorientation', (e) => {
+          const gamma = e.gamma || 0;  // Left-right tilt
+          const beta = e.beta || 0;     // Front-back tilt
+          tiltX = Math.max(-1, Math.min(1, gamma / 30));
+          tiltZ = Math.max(-1, Math.min(1, (beta - 90) / 30));
+        });
+      }
 
       // Controls
       const jetBtn = document.getElementById('jetBtn');
@@ -161,7 +187,7 @@
       });
       const tank = new THREE.Mesh(tankGeo, tankMat);
       tank.position.y = CONFIG.TANK_HEIGHT / 2;
-      scene.add(tank);
+      gameContainer.add(tank);
 
       // Edges
       const edges = new THREE.EdgesGeometry(tankGeo);
@@ -175,7 +201,7 @@
       const floor = new THREE.Mesh(floorGeo, floorMat);
       floor.rotation.x = -Math.PI / 2;
       floor.receiveShadow = true;
-      scene.add(floor);
+      gameContainer.add(floor);
     }
 
     function createPosts() {
@@ -190,7 +216,7 @@
         const post = new THREE.Mesh(postGeo, postMat);
         post.position.set(x, CONFIG.POST_HEIGHT / 2, 0);
         post.castShadow = true;
-        scene.add(post);
+        gameContainer.add(post);
 
         posts.push({
           mesh: post,
@@ -210,7 +236,7 @@
       });
       nozzleMesh = new THREE.Mesh(nozzleGeo, nozzleMat);
       nozzleMesh.position.set(CONFIG.NOZZLE_X, 0.15, CONFIG.NOZZLE_Z);
-      scene.add(nozzleMesh);
+      gameContainer.add(nozzleMesh);
     }
 
     function createRings() {
@@ -234,7 +260,7 @@
 
         ringMesh.position.set(startX, startY, startZ);
         ringMesh.castShadow = true;
-        scene.add(ringMesh);
+        gameContainer.add(ringMesh);
 
         rings.push({
           mesh: ringMesh,
@@ -297,8 +323,10 @@
         if (pos.y < 0.1) { pos.y = 0.1; ring.velocity.y *= -0.3; }
         if (pos.y > CONFIG.TANK_HEIGHT - 0.3) { pos.y = CONFIG.TANK_HEIGHT - 0.3; ring.velocity.y *= -0.3; }
 
-        // Rotation
-        ring.mesh.rotation.y += 0.02;
+        // Rotation - keep rings flat (horizontal)
+        ring.mesh.rotation.x = 0;
+        ring.mesh.rotation.z = 0;
+        ring.mesh.rotation.y += 0.02;  // Gentle spin around vertical axis
 
         // Scoring
         posts.forEach(post => {
@@ -330,11 +358,15 @@
         });
       });
 
+      // Apply tilt to entire game container
+      gameContainer.rotation.x = tiltZ * CONFIG.MAX_TILT;
+      gameContainer.rotation.z = -tiltX * CONFIG.MAX_TILT;
+
       renderer.render(scene, camera);
     }
 
     function resetGame() {
-      rings.forEach(ring => scene.remove(ring.mesh));
+      rings.forEach(ring => gameContainer.remove(ring.mesh));
       rings = [];
       score = 0;
       document.getElementById('score').textContent = score;
