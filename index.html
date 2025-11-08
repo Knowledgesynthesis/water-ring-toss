@@ -276,10 +276,11 @@
 const CONFIG = {
   COLORS: [0xff6b6b, 0xffd166, 0x06d6a0, 0x4cc9f0, 0xa78bfa, 0xf472b6],
   RING_COUNT: 12,
-  GRAVITY: -12.0,        // Stronger gravity - rings sink faster
-  WATER_DRAG: 0.94,      // Increased drag
-  JET_FORCE: 35,         // Stronger jet force
-  JET_RADIUS: 0.8,       // Smaller, more focused jet
+  GRAVITY: -8.0,         // Gravity - balanced for water
+  BUOYANCY: 3.5,         // Light buoyancy - rings slowly settle
+  WATER_DRAG: 0.92,      // Water resistance
+  JET_FORCE: 32,         // Jet force
+  JET_RADIUS: 1.0,       // Jet radius
   POST_HEIGHT: 3.5,
   POST_RADIUS: 0.08,
   RING_OUTER_R: 0.35,
@@ -555,8 +556,8 @@ function updatePhysics(dt) {
       return;
     }
 
-    // Gravity - always pulling down
-    let accelY = CONFIG.GRAVITY / ring.mass;
+    // Gravity and buoyancy - slight net downward force
+    let accelY = (CONFIG.GRAVITY + CONFIG.BUOYANCY) / ring.mass;
     let accelX = 0;
     let accelZ = 0;
 
