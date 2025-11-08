@@ -5,15 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
-<title>Water Ring Toss 3D — Realistic Edition</title>
+<title>Water Ring Toss 3D</title>
 <style>
   :root{
     --bg:#0a0e1a;
     --glass: rgba(255,255,255,0.08);
-    --glass-strong: rgba(255,255,255,0.15);
     --ink:#e5f0ff;
     --good:#34d399;
-    --warn:#fbbf24;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   html,body{
@@ -40,7 +38,7 @@
     height:100%;
   }
 
-  /* HUD Overlay */
+  /* HUD */
   .hud{
     position:absolute;
     top:0;
@@ -48,23 +46,15 @@
     right:0;
     z-index:10;
     display:flex;
-    flex-direction:column;
-    gap:clamp(6px, 1vh, 10px);
-    padding:clamp(12px, 2vh, 16px);
-    pointer-events:none;
-  }
-
-  .hud-row{
-    display:flex;
     justify-content:space-between;
     align-items:flex-start;
-    gap:clamp(6px, 1vw, 12px);
+    padding:clamp(12px, 2vh, 16px);
+    pointer-events:none;
   }
 
   .cluster{
     display:flex;
     gap:clamp(6px, 1vw, 10px);
-    flex-wrap:wrap;
     pointer-events:auto;
   }
 
@@ -85,15 +75,6 @@
   }
 
   .score{color:var(--good)}
-  .timer{color:var(--warn)}
-
-  .mode{
-    background: var(--glass-strong);
-    cursor:pointer;
-    user-select:none;
-    transition: transform 0.1s ease;
-  }
-  .mode:active{transform: scale(0.97)}
 
   .btn{
     background: var(--glass);
@@ -121,7 +102,7 @@
     .btn-text{display:none}
   }
 
-  /* Bottom Controls */
+  /* Controls */
   .controls{
     position:absolute;
     bottom:0;
@@ -136,7 +117,7 @@
 
   .info-row{
     display:flex;
-    justify-content:space-between;
+    justify-content:center;
     align-items:center;
     font-size:clamp(10px, 2vw, 12px);
     opacity:0.75;
@@ -246,7 +227,6 @@
   .i-play{-webkit-mask-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M8 5v14l11-7z"/></svg>')}
   .i-mute{-webkit-mask-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M16.5 12l3.5 3.5-1.5 1.5L15 13.5 11.5 17l-1.5-1.5L12 12 9 9l1.5-1.5L15 10.5l3.5-3.5L20 8.5zM3 9v6h4l5 5V4L7 9H3z"/></svg>')}
   .i-sound{-webkit-mask-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zm-2.5-8v2a8 8 0 0 1 0 12v2c3.87-1.17 6.7-4.78 6.7-9s-2.83-7.83-6.7-9z"/></svg>')}
-  .i-mode{-webkit-mask-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="%23fff" d="M12 2l4 4-4 4-4-4 4-4zm0 12l4 4-4 4-4-4 4-4zM2 12l4-4 4 4-4 4-4-4zm16 0l4-4 0 8-4-4z"/></svg>')}
 
   @media (prefers-reduced-motion: reduce){
     *{transition:none !important}
@@ -258,29 +238,20 @@
 
   <!-- HUD -->
   <div class="hud">
-    <div class="hud-row">
-      <div class="cluster">
-        <div class="pill score">Score: <span id="scoreVal">0</span></div>
-        <div class="pill timer">Time: <span id="timeVal">90s</span></div>
-      </div>
-      <div class="cluster">
-        <div class="pill mode" id="modeBtn"><span class="icon i-mode"></span> <span id="modeName">Classic</span></div>
-      </div>
+    <div class="cluster">
+      <div class="pill score">Score: <span id="scoreVal">0</span></div>
     </div>
-    <div class="hud-row">
-      <div class="cluster">
-        <button class="btn" id="resetBtn"><span class="icon i-reset"></span> <span class="btn-text">Reset</span></button>
-        <button class="btn" id="pauseBtn"><span class="icon i-pause" id="pauseIcon"></span> <span class="btn-text" id="pauseText">Pause</span></button>
-        <button class="btn" id="muteBtn"><span class="icon i-sound" id="muteIcon"></span> <span class="btn-text" id="muteText">Sound</span></button>
-      </div>
+    <div class="cluster">
+      <button class="btn" id="resetBtn"><span class="icon i-reset"></span> <span class="btn-text">Reset</span></button>
+      <button class="btn" id="pauseBtn"><span class="icon i-pause" id="pauseIcon"></span> <span class="btn-text" id="pauseText">Pause</span></button>
+      <button class="btn" id="muteBtn"><span class="icon i-sound" id="muteIcon"></span> <span class="btn-text" id="muteText">Sound</span></button>
     </div>
   </div>
 
   <!-- Controls -->
   <div class="controls">
     <div class="info-row">
-      <span>Hold to activate water jet</span>
-      <span>Best: <span id="bestVal">0</span></span>
+      <span>Hold button to activate water jet</span>
     </div>
     <button class="jet-btn" id="jetBtn">HOLD TO JET</button>
   </div>
@@ -303,15 +274,12 @@
   <script>
 /* ========================== CONFIG ========================== */
 const CONFIG = {
-  MODES: ['Classic', 'Storm', 'Gravity Tilt', 'Time Attack', 'Zen'],
   COLORS: [0xff6b6b, 0xffd166, 0x06d6a0, 0x4cc9f0, 0xa78bfa, 0xf472b6],
   RING_COUNT: 12,
-  CLASSIC_TIME: 90,
-  TA_TIME: 30,
-  GRAVITY: -9.8,
-  BUOYANCY: 6.5,
-  WATER_DRAG: 0.88,
-  JET_FORCE: 25,
+  GRAVITY: -12.0,        // Stronger gravity - rings sink faster
+  WATER_DRAG: 0.94,      // Increased drag
+  JET_FORCE: 35,         // Stronger jet force
+  JET_RADIUS: 0.8,       // Smaller, more focused jet
   POST_HEIGHT: 3.5,
   POST_RADIUS: 0.08,
   RING_OUTER_R: 0.35,
@@ -324,17 +292,14 @@ const CONFIG = {
 
 /* ========================== GLOBALS ========================== */
 let scene, camera, renderer, container;
-let rings = [], posts = [], bubbles = [];
+let rings = [], posts = [];
 let waterLevel = CONFIG.TANK_HEIGHT * 0.75;
 let jetting = false, jetStartTime = 0;
-let score = 0, timeLeft = CONFIG.CLASSIC_TIME, modeIndex = 0;
+let score = 0;
 let paused = false, muted = false, running = true;
-let bestTA = +localStorage.getItem('ringToss3D.bestTA') || 0;
 let clock = new THREE.Clock();
 let tankMesh, waterMesh, nozzleMesh;
 let jetParticles = [];
-
-document.getElementById('bestVal').textContent = bestTA;
 
 /* ========================== THREE.JS SETUP ========================== */
 function initThree() {
@@ -540,14 +505,14 @@ function createRing(x, y, z, colorHex) {
     mesh: ring,
     velocity: new THREE.Vector3(0, 0, 0),
     angularVel: new THREE.Vector3(
-      (Math.random() - 0.5) * 2,
-      (Math.random() - 0.5) * 2,
-      (Math.random() - 0.5) * 2
+      (Math.random() - 0.5) * 1,
+      (Math.random() - 0.5) * 1,
+      (Math.random() - 0.5) * 1
     ),
     scored: false,
     hooked: false,
     hookedPost: null,
-    mass: 0.3,
+    mass: 0.35,
   };
 }
 
@@ -575,24 +540,6 @@ function spawnInitialRings() {
 
 /* ========================== PHYSICS ========================== */
 function updatePhysics(dt) {
-  const stormMode = CONFIG.MODES[modeIndex] === 'Storm';
-  const gravityMode = CONFIG.MODES[modeIndex] === 'Gravity Tilt';
-
-  // Storm currents
-  let currentX = 0, currentZ = 0;
-  if (stormMode) {
-    const t = Date.now() * 0.001;
-    currentX = Math.sin(t * 0.8) * 2.5 + Math.sin(t * 0.3) * 1.5;
-    currentZ = Math.cos(t * 0.6) * 2.0;
-  }
-
-  // Gravity tilt
-  let gravX = 0, gravZ = 0;
-  if (gravityMode) {
-    gravX = Math.sin(Date.now() * 0.0008) * 2.5;
-    gravZ = Math.cos(Date.now() * 0.0006) * 2.0;
-  }
-
   rings.forEach(ring => {
     const pos = ring.mesh.position;
 
@@ -608,41 +555,38 @@ function updatePhysics(dt) {
       return;
     }
 
-    // In water - apply buoyancy
-    const inWater = pos.y < waterLevel;
+    // Gravity - always pulling down
+    let accelY = CONFIG.GRAVITY / ring.mass;
+    let accelX = 0;
+    let accelZ = 0;
 
-    // Forces
-    let accelY = CONFIG.GRAVITY;
-    let accelX = (currentX + gravX) / ring.mass;
-    let accelZ = (currentZ + gravZ) / ring.mass;
-
-    if (inWater) {
-      accelY += CONFIG.BUOYANCY / ring.mass;
-    }
-
-    // Jet force
-    if (jetting && inWater) {
+    // Jet force - ONLY when jetting and ONLY near the nozzle
+    if (jetting) {
       const nozzlePos = nozzleMesh.position;
       const dx = pos.x - nozzlePos.x;
       const dy = pos.y - nozzlePos.y;
       const dz = pos.z - nozzlePos.z;
       const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
 
-      const maxDist = 3.5;
-      if (dist < maxDist) {
-        const jetPower = 1 - dist / maxDist;
+      // Only apply jet force within a small radius
+      if (dist < CONFIG.JET_RADIUS) {
+        const jetPower = 1 - (dist / CONFIG.JET_RADIUS);
         const holdTime = (Date.now() - jetStartTime) / 1000;
         const powerMult = Math.min(1 + holdTime * 0.5, 2);
         const force = CONFIG.JET_FORCE * jetPower * powerMult;
 
-        // Upward with some spread
+        // Upward jet force
         accelY += force / ring.mass;
-        accelX += (Math.random() - 0.5) * 3;
-        accelZ += (Math.random() - 0.5) * 3;
+
+        // Spread rings outward slightly from jet center
+        accelX += (dx / dist) * force * 0.3 / ring.mass;
+        accelZ += (dz / dist) * force * 0.3 / ring.mass;
 
         // Turbulence
-        ring.angularVel.x += (Math.random() - 0.5) * 5 * dt;
-        ring.angularVel.z += (Math.random() - 0.5) * 5 * dt;
+        accelX += (Math.random() - 0.5) * 4;
+        accelZ += (Math.random() - 0.5) * 4;
+        ring.angularVel.x += (Math.random() - 0.5) * 6 * dt;
+        ring.angularVel.z += (Math.random() - 0.5) * 6 * dt;
       }
     }
 
@@ -651,11 +595,9 @@ function updatePhysics(dt) {
     ring.velocity.y += accelY * dt;
     ring.velocity.z += accelZ * dt;
 
-    // Drag
-    if (inWater) {
-      ring.velocity.multiplyScalar(Math.pow(CONFIG.WATER_DRAG, dt));
-      ring.angularVel.multiplyScalar(Math.pow(CONFIG.WATER_DRAG + 0.05, dt));
-    }
+    // Water drag
+    ring.velocity.multiplyScalar(Math.pow(CONFIG.WATER_DRAG, dt));
+    ring.angularVel.multiplyScalar(Math.pow(CONFIG.WATER_DRAG + 0.02, dt));
 
     // Update position
     pos.x += ring.velocity.x * dt;
@@ -668,7 +610,7 @@ function updatePhysics(dt) {
     ring.mesh.rotation.z += ring.angularVel.z * dt;
 
     // Tank boundaries
-    const wallRestitution = 0.4;
+    const wallRestitution = 0.3;
     const maxX = CONFIG.TANK_WIDTH / 2 - 0.4;
     const maxZ = CONFIG.TANK_DEPTH / 2 - 0.4;
     const minY = 0.2;
@@ -693,7 +635,7 @@ function updatePhysics(dt) {
           ring.scored = true;
           ring.hooked = true;
           ring.hookedPost = post;
-          score += stormMode ? 2 : 1;
+          score += 1;
           document.getElementById('scoreVal').textContent = score;
           playSound('sndScore', 0.7);
 
@@ -843,50 +785,9 @@ function animate() {
 
     // Water animation
     waterMesh.position.y = waterLevel + Math.sin(Date.now() * 0.002) * 0.02;
-
-    // Time Attack spawning
-    if (CONFIG.MODES[modeIndex] === 'Time Attack' && Math.random() < dt * 1.5) {
-      const x = (Math.random() - 0.5) * (CONFIG.TANK_WIDTH - 1);
-      const z = (Math.random() - 0.5) * (CONFIG.TANK_DEPTH - 1);
-      const ring = createRing(x, waterLevel - 0.5, z, CONFIG.COLORS[Math.floor(Math.random() * CONFIG.COLORS.length)]);
-      ring.velocity.y = -Math.random() * 2;
-      rings.push(ring);
-      if (rings.length > 40) {
-        scene.remove(rings[0].mesh);
-        rings.shift();
-      }
-    }
   }
 
   renderer.render(scene, camera);
-}
-
-/* ========================== TIMER ========================== */
-let lastSecond = Date.now();
-
-function updateTimer() {
-  if (!paused && timeLeft > 0) {
-    const now = Date.now();
-    if (now - lastSecond >= 1000) {
-      timeLeft--;
-      document.getElementById('timeVal').textContent = timeLeft + 's';
-      lastSecond = now;
-
-      if (timeLeft === 0) {
-        paused = true;
-        showPause(true, "Time's Up!");
-        if (CONFIG.MODES[modeIndex] === 'Time Attack' && score > bestTA) {
-          bestTA = score;
-          localStorage.setItem('ringToss3D.bestTA', bestTA);
-          document.getElementById('bestVal').textContent = bestTA;
-        }
-      }
-    }
-  }
-
-  if (!paused) {
-    requestAnimationFrame(updateTimer);
-  }
 }
 
 /* ========================== CONTROLS ========================== */
@@ -929,41 +830,19 @@ document.addEventListener('keyup', e => {
 document.getElementById('resetBtn').onclick = resetGame;
 document.getElementById('pauseBtn').onclick = togglePause;
 document.getElementById('muteBtn').onclick = toggleMute;
-document.getElementById('modeBtn').onclick = cycleMode;
 
 /* ========================== GAME FUNCTIONS ========================== */
 function resetGame() {
   score = 0;
   document.getElementById('scoreVal').textContent = score;
 
-  const mode = CONFIG.MODES[modeIndex];
-  if (mode === 'Time Attack') {
-    timeLeft = CONFIG.TA_TIME;
-  } else if (mode === 'Zen') {
-    timeLeft = 999;
-    document.getElementById('timeVal').textContent = '∞';
-  } else {
-    timeLeft = CONFIG.CLASSIC_TIME;
-  }
-
-  if (mode !== 'Zen') {
-    document.getElementById('timeVal').textContent = timeLeft + 's';
-  }
-
   jetParticles.forEach(p => scene.remove(p.mesh));
   jetParticles = [];
 
-  if (mode !== 'Time Attack') {
-    spawnInitialRings();
-  } else {
-    rings.forEach(r => scene.remove(r.mesh));
-    rings = [];
-  }
+  spawnInitialRings();
 
   paused = false;
   showPause(false);
-  lastSecond = Date.now();
-  updateTimer();
 }
 
 function togglePause() {
@@ -971,22 +850,12 @@ function togglePause() {
   document.getElementById('pauseText').textContent = paused ? 'Resume' : 'Pause';
   document.getElementById('pauseIcon').className = 'icon ' + (paused ? 'i-play' : 'i-pause');
   showPause(paused);
-  if (!paused) {
-    lastSecond = Date.now();
-    updateTimer();
-  }
 }
 
 function toggleMute() {
   muted = !muted;
   document.getElementById('muteText').textContent = muted ? 'Muted' : 'Sound';
   document.getElementById('muteIcon').className = 'icon ' + (muted ? 'i-mute' : 'i-sound');
-}
-
-function cycleMode() {
-  modeIndex = (modeIndex + 1) % CONFIG.MODES.length;
-  document.getElementById('modeName').textContent = CONFIG.MODES[modeIndex];
-  resetGame();
 }
 
 function showPause(show, title = 'Paused') {
@@ -1015,7 +884,6 @@ function init() {
   initThree();
   spawnInitialRings();
   animate();
-  updateTimer();
 }
 
 if (document.readyState === 'loading') {
@@ -1026,15 +894,7 @@ if (document.readyState === 'loading') {
 
 // Public API
 window.ringToss3D = {
-  reset: resetGame,
-  setMode: (name) => {
-    const idx = CONFIG.MODES.indexOf(name);
-    if (idx > -1) {
-      modeIndex = idx;
-      document.getElementById('modeName').textContent = name;
-      resetGame();
-    }
-  }
+  reset: resetGame
 };
   </script>
 </body>
