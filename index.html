@@ -279,8 +279,8 @@ const CONFIG = {
   GRAVITY: -8.0,         // Gravity - balanced for water
   BUOYANCY: 3.5,         // Light buoyancy - rings slowly settle
   WATER_DRAG: 0.92,      // Water resistance
-  JET_FORCE: 32,         // Jet force
-  JET_RADIUS: 1.0,       // Jet radius
+  JET_FORCE: 45,         // Stronger jet force
+  JET_RADIUS: 1.2,       // Jet radius
   POST_HEIGHT: 3.5,
   POST_RADIUS: 0.08,
   RING_OUTER_R: 0.35,
@@ -289,7 +289,9 @@ const CONFIG = {
   TANK_WIDTH: 4,
   TANK_HEIGHT: 6,
   TANK_DEPTH: 1.5,       // Reduced depth - less 3D depth
-  TILT_SENSITIVITY: 0.4, // How much tilt affects nozzle movement
+  TILT_FORCE: 4.5,       // How much tilt affects ring movement (gravity)
+  NOZZLE_X: -1.2,        // Nozzle on left side
+  NOZZLE_Z: 0.6,         // Nozzle position front
 };
 
 /* ========================== GLOBALS ========================== */
@@ -302,8 +304,7 @@ let paused = false, muted = false, running = true;
 let clock = new THREE.Clock();
 let tankMesh, waterMesh, nozzleMesh;
 let jetParticles = [];
-let tiltX = 0, tiltZ = 0;  // Tilt values for moving nozzle
-let nozzleBaseX = 0, nozzleBaseZ = 0.6;  // Base nozzle position (front of tank)
+let tiltX = 0, tiltZ = 0;  // Tilt values - affect rings as lateral gravity
 
 /* ========================== THREE.JS SETUP ========================== */
 function initThree() {
@@ -468,7 +469,7 @@ function createNozzle() {
     roughness: 0.2,
   });
   nozzleMesh = new THREE.Mesh(nozzleGeo, nozzleMat);
-  nozzleMesh.position.set(nozzleBaseX, 0.1, nozzleBaseZ);
+  nozzleMesh.position.set(CONFIG.NOZZLE_X, 0.1, CONFIG.NOZZLE_Z);
   scene.add(nozzleMesh);
 }
 
@@ -563,6 +564,10 @@ function updatePhysics(dt) {
     let accelY = (CONFIG.GRAVITY + CONFIG.BUOYANCY) / ring.mass;
     let accelX = 0;
     let accelZ = 0;
+
+    // Apply tilt as lateral gravity forces
+    accelX += tiltX * CONFIG.TILT_FORCE / ring.mass;
+    accelZ += tiltZ * CONFIG.TILT_FORCE / ring.mass;
 
     // Jet force - ONLY when jetting and ONLY near the nozzle
     if (jetting) {
@@ -777,12 +782,6 @@ function animate() {
 
   if (!paused) {
     updatePhysics(dt);
-
-    // Update nozzle position based on tilt
-    const maxTiltX = (CONFIG.TANK_WIDTH / 2) * CONFIG.TILT_SENSITIVITY;
-    const maxTiltZ = (CONFIG.TANK_DEPTH / 2) * CONFIG.TILT_SENSITIVITY;
-    nozzleMesh.position.x = nozzleBaseX + (tiltX * maxTiltX);
-    nozzleMesh.position.z = nozzleBaseZ + (tiltZ * maxTiltZ);
 
     // Spawn jet particles
     if (jetting && Date.now() - lastParticleTime > 50) {
